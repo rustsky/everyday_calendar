@@ -1,0 +1,20 @@
+[package]
+name = "everydaycalendar"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+dioxus = { version = "0.7", features = ["web"] }
+gloo-timers = { version = "0.4.0", features = ["futures"] }
+js-sys = "0.3.105"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+wasm-bindgen = "0.2.128"
+web-sys = { version = "0.3.105", features = ["Window", "Storage", "Document", "Element", "HtmlElement", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "MediaQueryList", "AudioContext", "OscillatorNode", "GainNode", "AudioParam", "AudioDestinationNode", "OscillatorType", "HtmlInputElement", "DomRect", "ScrollBehavior", "ScrollIntoViewOptions", "ScrollLogicalPosition"] }

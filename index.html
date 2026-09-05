@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <!-- dx fills the title in from Dioxus.toml. -->
+    <title></title>
+    <meta
+      name="description"
+      content="A web recreation of Simone Giertz's Every Day Calendar. Set one goal, light one day at a time, and don't break the chain."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#7ccbc4" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23141414'/%3E%3Cpath d='M11 7h10l5 9-5 9H11l-5-9z' fill='%23f4c25c'/%3E%3C/svg%3E"
+    />
+    <style>
+      /* Painted before the wasm module lands, so there is no white flash. */
+      html,
+      body {
+        margin: 0;
+        background: #7ccbc4;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #10151a;
+        }
+      }
+      /* Held back until the app's stylesheet lands, so nothing flashes
+         unstyled. The script below always reveals it, stylesheet or not. */
+      #main {
+        opacity: 0;
+        transition: opacity 0.22s ease;
+      }
+      .noscript {
+        max-width: 34rem;
+        margin: 18vh auto;
+        padding: 0 24px;
+        font: 16px/1.6 "Helvetica Neue", Helvetica, system-ui, sans-serif;
+        color: #14322f;
+        text-align: center;
+      }
+    </style>
+    <script>
+      // The app injects its own stylesheet once the wasm module boots. Reveal
+      // the page when that lands — and unconditionally after a grace period,
+      // so a missing stylesheet can never leave a blank screen.
+      (function () {
+        var revealed = false;
+        function reveal() {
+          if (revealed) return;
+          revealed = true;
+          var main = document.getElementById("main");
+          if (main) main.style.opacity = "1";
+        }
+        var fallback = setTimeout(reveal, 1500);
+        function watch(link) {
+          link.addEventListener("load", function () {
+            clearTimeout(fallback);
+            reveal();
+          });
+          link.addEventListener("error", function () {
+            clearTimeout(fallback);
+            reveal();
+          });
+        }
+        new MutationObserver(function (records, observer) {
+          for (var i = 0; i < records.length; i++) {
+            var added = records[i].addedNodes;
+            for (var j = 0; j < added.length; j++) {
+              var node = added[j];
+              if (node.tagName === "LINK" && node.rel === "stylesheet") {
+                watch(node);
+                observer.disconnect();
+                return;
+              }
+            }
+          }
+        }).observe(document.head, { childList: true });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="main"></div>
+    <noscript>
+      <div class="noscript">
+        <h1>The Every Day Calendar</h1>
+        <p>
+          This one needs JavaScript — the board, and everything you have ever
+          lit on it, runs entirely in your browser.
+        </p>
+      </div>
+    </noscript>
+  </body>
+</html>
