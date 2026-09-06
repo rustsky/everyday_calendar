@@ -4,8 +4,9 @@ use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
 use super::{Ctx, go_to_month, paint, press, release, use_ctx};
-use crate::date::{self, Date};
-use crate::store::View;
+use crate::platform;
+use edc_core::prefs::View;
+use edc_core::{Date, date};
 
 #[derive(Props, Clone, PartialEq)]
 pub struct BoardProps {
@@ -16,7 +17,12 @@ pub fn Board(props: BoardProps) -> Element {
     let ctx = use_ctx();
     let year = *ctx.year.read();
     let today = *ctx.today.read();
-    let goal_name = ctx.state.read().active_goal().name.clone();
+    let goal_name = ctx
+        .doc
+        .read()
+        .goal(&ctx.goal_id())
+        .map(|record| record.name.clone())
+        .unwrap_or_default();
     let streak = ctx.stats().current;
     let unit = if streak == 1 { "day" } else { "days" };
 
@@ -49,7 +55,7 @@ fn YearGrid(props: GridProps) -> Element {
     let ctx = use_ctx();
     let year = props.year;
     let today = props.today;
-    let bits = ctx.state.read().active_goal().year(year);
+    let bits = ctx.doc.read().year_bits(&ctx.goal_id(), year);
     let hold = *ctx.hold.read();
     let last_ordinal = date::days_in_year(year) as usize - 1;
     let focus = (*ctx.focus.read()).min(last_ordinal);
@@ -109,7 +115,7 @@ fn MonthGrid(props: GridProps) -> Element {
     let year = props.year;
     let today = props.today;
     let month = *ctx.month.read();
-    let bits = ctx.state.read().active_goal().year(year);
+    let bits = ctx.doc.read().year_bits(&ctx.goal_id(), year);
     let hold = *ctx.hold.read();
 
     let month_name = date::MONTHS_LONG[month as usize];
@@ -364,6 +370,6 @@ fn move_focus(mut ctx: Ctx, ord: usize) {
     // The target pad may not exist until the grid has re-rendered.
     spawn(async move {
         TimeoutFuture::new(0).await;
-        super::focus_pad(ord);
+        platform::focus(&format!("pad-{ord}"));
     });
 }

@@ -4,7 +4,7 @@
 //! the chain is worth measuring.
 
 use crate::date::{self, Date};
-use crate::store::Goal;
+use crate::model::Doc;
 
 /// Streak lengths worth making a fuss about.
 pub const MILESTONES: [u32; 8] = [7, 14, 30, 50, 100, 180, 365, 500];
@@ -52,30 +52,30 @@ pub fn milestone_for(streak: u32) -> Option<u32> {
 
 /// Counts back from `from` while days stay lit, capped so a corrupt import
 /// can't spin forever.
-fn run_ending_at(goal: &Goal, from: Date) -> u32 {
+fn run_ending_at(doc: &Doc, goal: &str, from: Date) -> u32 {
     let mut count = 0;
     let mut cursor = from;
-    while goal.is_lit(cursor) && count < 200_000 {
+    while doc.is_lit(goal, cursor) && count < 200_000 {
         count += 1;
         cursor = cursor.prev();
     }
     count
 }
 
-pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> Stats {
-    let today_done = goal.is_lit(today);
+pub fn compute(doc: &Doc, goal: &str, today: Date, board_year: i32, board_month: u32) -> Stats {
+    let today_done = doc.is_lit(goal, today);
 
     // A day that hasn't happened yet shouldn't read as a broken chain, so when
     // today is still pending the run is measured from yesterday.
     let current = if today_done {
-        run_ending_at(goal, today)
+        run_ending_at(doc, goal, today)
     } else {
-        run_ending_at(goal, today.prev())
+        run_ending_at(doc, goal, today.prev())
     };
 
     let mut longest = 0;
     let mut run = 0;
-    if let Some((first, last)) = goal.span() {
+    if let Some((first, last)) = doc.span(goal) {
         let mut cursor = Date {
             year: first,
             ordinal: 0,
@@ -85,7 +85,7 @@ pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> S
             ordinal: date::days_in_year(last) as usize - 1,
         };
         loop {
-            if goal.is_lit(cursor) {
+            if doc.is_lit(goal, cursor) {
                 run += 1;
                 longest = longest.max(run);
             } else {
@@ -98,7 +98,7 @@ pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> S
         }
     }
 
-    let year_bits = goal.year(board_year);
+    let year_bits = doc.year_bits(goal, board_year);
     let year_days = date::days_in_year(board_year);
     let month_days = date::days_in_month(board_year, board_month);
     let month_start = date::ordinal(board_year, board_month, 1);
@@ -109,7 +109,7 @@ pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> S
     let mut last_year = 0;
     let mut cursor = today;
     for _ in 0..365 {
-        if goal.is_lit(cursor) {
+        if doc.is_lit(goal, cursor) {
             last_year += 1;
         }
         cursor = cursor.prev();
@@ -118,7 +118,7 @@ pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> S
     Stats {
         current,
         longest: longest.max(current),
-        total: goal.total(),
+        total: doc.total(goal),
         year_lit: year_bits.count(),
         year_days,
         month_lit,
@@ -132,20 +132,26 @@ pub fn compute(goal: &Goal, today: Date, board_year: i32, board_month: u32) -> S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::Accent;
+    use crate::model::Stamp;
 
-    fn goal_with(days: &[(i32, u32, u32)]) -> Goal {
-        let mut goal = Goal::new("Test", Accent::Gold);
-        for (y, m, d) in days {
-            goal.toggle(*y, date::ordinal(*y, *m, *d));
+    fn doc_with(days: &[(i32, u32, u32)]) -> Doc {
+        let mut doc = Doc::new();
+        for (year, month, day) in days {
+            doc.set_day(
+                "g1",
+                *year,
+                date::ordinal(*year, *month, *day),
+                true,
+                Stamp::new(1, "test"),
+            );
         }
-        goal
+        doc
     }
 
     #[test]
     fn counts_a_streak_ending_today() {
-        let goal = goal_with(&[(2026, 2, 1), (2026, 2, 2), (2026, 2, 3)]);
-        let stats = compute(&goal, Date::new(2026, 2, 3), 2026, 2);
+        let doc = doc_with(&[(2026, 2, 1), (2026, 2, 2), (2026, 2, 3)]);
+        let stats = compute(&doc, "g1", Date::new(2026, 2, 3), 2026, 2);
         assert_eq!(stats.current, 3);
         assert!(stats.today_done);
         assert!(!stats.at_risk);
@@ -153,24 +159,24 @@ mod tests {
 
     #[test]
     fn today_pending_does_not_break_the_chain() {
-        let goal = goal_with(&[(2026, 2, 1), (2026, 2, 2)]);
-        let stats = compute(&goal, Date::new(2026, 2, 3), 2026, 2);
+        let doc = doc_with(&[(2026, 2, 1), (2026, 2, 2)]);
+        let stats = compute(&doc, "g1", Date::new(2026, 2, 3), 2026, 2);
         assert_eq!(stats.current, 2);
         assert!(stats.at_risk);
     }
 
     #[test]
     fn a_gap_yesterday_ends_the_chain() {
-        let goal = goal_with(&[(2026, 2, 1)]);
-        let stats = compute(&goal, Date::new(2026, 2, 3), 2026, 2);
+        let doc = doc_with(&[(2026, 2, 1)]);
+        let stats = compute(&doc, "g1", Date::new(2026, 2, 3), 2026, 2);
         assert_eq!(stats.current, 0);
         assert_eq!(stats.longest, 1);
     }
 
     #[test]
     fn streaks_cross_the_new_year() {
-        let goal = goal_with(&[(2025, 11, 30), (2025, 11, 31), (2026, 0, 1)]);
-        let stats = compute(&goal, Date::new(2026, 0, 1), 2026, 0);
+        let doc = doc_with(&[(2025, 11, 30), (2025, 11, 31), (2026, 0, 1)]);
+        let stats = compute(&doc, "g1", Date::new(2026, 0, 1), 2026, 0);
         assert_eq!(stats.current, 3);
         assert_eq!(stats.longest, 3);
         assert_eq!(stats.total, 3);
@@ -178,10 +184,25 @@ mod tests {
 
     #[test]
     fn month_totals_track_the_board() {
-        let goal = goal_with(&[(2026, 1, 1), (2026, 1, 2), (2026, 3, 9)]);
-        let stats = compute(&goal, Date::new(2026, 1, 2), 2026, 1);
+        let doc = doc_with(&[(2026, 1, 1), (2026, 1, 2), (2026, 3, 9)]);
+        let stats = compute(&doc, "g1", Date::new(2026, 1, 2), 2026, 1);
         assert_eq!(stats.month_lit, 2);
         assert_eq!(stats.month_days, 28);
         assert_eq!(stats.year_lit, 3);
+    }
+
+    #[test]
+    fn a_cleared_day_stops_counting() {
+        let mut doc = doc_with(&[(2026, 2, 1), (2026, 2, 2), (2026, 2, 3)]);
+        doc.set_day(
+            "g1",
+            2026,
+            date::ordinal(2026, 2, 2),
+            false,
+            Stamp::new(9, "test"),
+        );
+        let stats = compute(&doc, "g1", Date::new(2026, 2, 3), 2026, 2);
+        assert_eq!(stats.current, 1);
+        assert_eq!(stats.total, 2);
     }
 }

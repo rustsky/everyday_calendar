@@ -5,13 +5,15 @@ mod board;
 mod console;
 
 use dioxus::prelude::*;
+use edc_core::model::{Doc, GoalId, Stamp};
+use edc_core::prefs::Prefs;
+use edc_core::stats::{self, Stats};
+use edc_core::{Date, YearBits, date};
 use gloo_timers::future::TimeoutFuture;
-use wasm_bindgen::JsCast;
 
 use crate::audio::{self, Tone};
-use crate::date::{self, Date};
-use crate::stats::{self, Stats};
-use crate::store::{self, AppState, YearBits};
+use crate::sync::{self, Status};
+use crate::{platform, storage};
 
 /// How long a deliberate press has to last before a day changes state.
 pub const HOLD_LIGHT_MS: u32 = 550;
@@ -21,6 +23,11 @@ pub const HOLD_DIM_MS: u32 = 900;
 pub const HOLD_RESET_MS: u32 = 10_000;
 /// Length of the power-on light sweep.
 const BOOT_MS: u32 = 1_700;
+/// How often the sync loop wakes up to look for work.
+const SYNC_TICK_MS: u32 = 1_000;
+/// How long to go without talking to the server before checking in anyway, so
+/// changes made on another device turn up on their own.
+const SYNC_POLL_MS: u64 = 20_000;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hold {
@@ -34,7 +41,7 @@ pub struct Toast {
     pub id: u64,
     pub text: String,
     /// A year snapshot that the toast's Undo button can restore.
-    pub undo: Option<(usize, i32, YearBits)>,
+    pub undo: Option<(GoalId, i32, YearBits)>,
 }
 
 pub struct Burst {
@@ -44,7 +51,10 @@ pub struct Burst {
 
 #[derive(Clone, Copy)]
 pub struct Ctx {
-    pub state: Signal<AppState>,
+    pub doc: Signal<Doc>,
+    pub prefs: Signal<Prefs>,
+    /// This browser's id. Stamped on every write, and the merge tie-break.
+    pub device: Signal<String>,
     pub today: Signal<Date>,
     pub year: Signal<i32>,
     pub month: Signal<u32>,
@@ -57,6 +67,10 @@ pub struct Ctx {
     pub toast: Signal<Option<Toast>>,
     pub burst: Signal<Option<Burst>>,
     pub announce: Signal<String>,
+    pub sync: Signal<Status>,
+    /// Set by every local edit, cleared once the server has it.
+    pub dirty: Signal<bool>,
+    pub last_sync: Signal<u64>,
     counter: Signal<u64>,
 }
 
@@ -67,10 +81,28 @@ impl Ctx {
         id
     }
 
+    pub fn stamp(&self) -> Stamp {
+        Stamp::new(platform::now_ms(), self.device.peek().clone())
+    }
+
+    /// The goal this device is looking at, falling back to the first one when
+    /// the remembered goal has been deleted on another device.
+    pub fn goal_id(&self) -> GoalId {
+        let doc = self.doc.read();
+        let ids = doc.goal_ids();
+        self.prefs
+            .read()
+            .active
+            .clone()
+            .filter(|id| ids.contains(id))
+            .or_else(|| ids.first().cloned())
+            .unwrap_or_default()
+    }
+
     pub fn stats(&self) -> Stats {
-        let state = self.state.read();
         stats::compute(
-            state.active_goal(),
+            &self.doc.read(),
+            &self.goal_id(),
             *self.today.read(),
             *self.year.read(),
             *self.month.read(),
@@ -78,7 +110,13 @@ impl Ctx {
     }
 
     pub fn is_lit(&self, ord: usize) -> bool {
-        self.state.read().active_goal().year(*self.year.read()).get(ord)
+        self.doc.read().is_lit(
+            &self.goal_id(),
+            Date {
+                year: *self.year.read(),
+                ordinal: ord,
+            },
+        )
     }
 }
 
@@ -86,30 +124,16 @@ pub fn use_ctx() -> Ctx {
     use_context::<Ctx>()
 }
 
-fn prefers_reduced_motion() -> bool {
-    web_sys::window()
-        .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
-        .map(|m| m.matches())
-        .unwrap_or(false)
-}
-
-/// Moves keyboard focus to a pad without disturbing anything else.
-pub fn focus_pad(ord: usize) {
-    let Some(document) = web_sys::window().and_then(|w| w.document()) else {
-        return;
-    };
-    if let Some(element) = document.get_element_by_id(&format!("pad-{ord}")) {
-        if let Ok(element) = element.dyn_into::<web_sys::HtmlElement>() {
-            let _ = element.focus();
-        }
-    }
+/// Records that there is something for the sync loop to send.
+fn touch(mut ctx: Ctx) {
+    ctx.dirty.set(true);
 }
 
 pub fn announce(mut ctx: Ctx, text: impl Into<String>) {
     ctx.announce.set(text.into());
 }
 
-pub fn show_toast(mut ctx: Ctx, text: impl Into<String>, undo: Option<(usize, i32, YearBits)>) {
+pub fn show_toast(mut ctx: Ctx, text: impl Into<String>, undo: Option<(GoalId, i32, YearBits)>) {
     let id = ctx.next_id();
     ctx.toast.set(Some(Toast {
         id,
@@ -132,7 +156,7 @@ fn celebrate(mut ctx: Ctx, streak: u32) {
         n => format!("{n} days in a row."),
     };
     ctx.burst.set(Some(Burst { id, label }));
-    if ctx.state.peek().sound {
+    if ctx.prefs.peek().sound {
         audio::play(Tone::Milestone);
     }
     spawn(async move {
@@ -145,12 +169,16 @@ fn celebrate(mut ctx: Ctx, streak: u32) {
 }
 
 /// Flips a single day and reports what happened.
-pub fn toggle_day(mut ctx: Ctx, ord: usize) {
+pub fn toggle_day(ctx: Ctx, ord: usize) {
     let year = *ctx.year.peek();
-    let lit = {
-        let mut state = ctx.state.write();
-        state.active_goal_mut().toggle(year, ord)
-    };
+    let goal = ctx.goal_id();
+    let lit = !ctx.is_lit(ord);
+    let stamp = ctx.stamp();
+    {
+        let mut doc = ctx.doc.clone();
+        doc.write().set_day(&goal, year, ord, lit, stamp);
+    }
+    touch(ctx);
 
     let after = ctx.stats();
     let date = Date { year, ordinal: ord };
@@ -166,7 +194,7 @@ pub fn toggle_day(mut ctx: Ctx, ord: usize) {
         ),
     );
 
-    if ctx.state.peek().sound {
+    if ctx.prefs.peek().sound {
         audio::play(if lit { Tone::Light } else { Tone::Dim });
     }
     if lit {
@@ -179,37 +207,44 @@ pub fn toggle_day(mut ctx: Ctx, ord: usize) {
 /// Clears the year on the board, keeping a snapshot for Undo.
 pub fn reset_year(ctx: Ctx) {
     let year = *ctx.year.peek();
-    let current = ctx.state.peek().active_goal().year(year);
+    let goal = ctx.goal_id();
+    let current = ctx.doc.peek().year_bits(&goal, year);
     reset_year_to(ctx, current);
 }
 
 /// `restore` is what Undo puts back. For the January 1 hold that is the state
 /// from before the press lit the pad, not after — the reset gesture shouldn't
 /// leave its own fingerprint behind.
-fn reset_year_to(mut ctx: Ctx, restore: YearBits) {
+fn reset_year_to(ctx: Ctx, restore: YearBits) {
     let year = *ctx.year.peek();
-    let (index, current) = {
-        let state = ctx.state.peek();
-        (state.active, state.active_goal().year(year))
-    };
+    let goal = ctx.goal_id();
+    let current = ctx.doc.peek().year_bits(&goal, year);
     if current.is_empty() && restore.is_empty() {
         return;
     }
+
+    let stamp = ctx.stamp();
     {
-        let mut state = ctx.state.write();
-        state.active_goal_mut().set_year(year, YearBits::default());
+        let mut doc = ctx.doc.clone();
+        doc.write().clear_year(&goal, year, stamp);
     }
+    touch(ctx);
+
     announce(ctx, format!("{year} cleared."));
-    show_toast(ctx, format!("{year} cleared."), Some((index, year, restore)));
+    show_toast(
+        ctx,
+        format!("{year} cleared."),
+        Some((goal, year, restore)),
+    );
 }
 
-pub fn undo_reset(mut ctx: Ctx, index: usize, year: i32, bits: YearBits) {
+pub fn undo_reset(mut ctx: Ctx, goal: GoalId, year: i32, bits: YearBits) {
+    let stamp = ctx.stamp();
     {
-        let mut state = ctx.state.write();
-        if let Some(goal) = state.goals.get_mut(index) {
-            goal.set_year(year, bits);
-        }
+        let mut doc = ctx.doc.clone();
+        doc.write().restore_year(&goal, year, bits, stamp);
     }
+    touch(ctx);
     ctx.toast.set(None);
     announce(ctx, format!("{year} restored."));
 }
@@ -217,7 +252,7 @@ pub fn undo_reset(mut ctx: Ctx, index: usize, year: i32, bits: YearBits) {
 /// Begins a press. In ritual mode the day only changes once the press has been
 /// held long enough; otherwise it flips immediately, like the original app.
 pub fn press(mut ctx: Ctx, ord: usize) {
-    if !ctx.state.peek().ritual {
+    if !ctx.prefs.peek().ritual {
         toggle_day(ctx, ord);
         return;
     }
@@ -227,7 +262,7 @@ pub fn press(mut ctx: Ctx, ord: usize) {
 
     // Snapshotted before the press changes anything, so a January 1 reset can
     // undo the whole gesture rather than just the clear.
-    let before_gesture = ctx.state.peek().active_goal().year(*ctx.year.peek());
+    let before_gesture = ctx.doc.peek().year_bits(&ctx.goal_id(), *ctx.year.peek());
 
     let ms = if ctx.is_lit(ord) {
         HOLD_DIM_MS
@@ -277,7 +312,7 @@ pub fn release(mut ctx: Ctx) {
 /// Drag-to-paint, available only when the ritual is switched off — this is how
 /// the original app behaved.
 pub fn paint(ctx: Ctx, ord: usize) {
-    if ctx.state.peek().ritual {
+    if ctx.prefs.peek().ritual {
         return;
     }
     toggle_day(ctx, ord);
@@ -313,17 +348,67 @@ pub fn go_to_month(mut ctx: Ctx, delta: i32) {
     ctx.focus.set(ord);
 }
 
+/// One exchange with the server: send everything, adopt what comes back.
+async fn exchange(mut ctx: Ctx) {
+    ctx.sync.set(Status::Syncing);
+    ctx.dirty.set(false);
+    let snapshot = ctx.doc.peek().clone();
+
+    match sync::exchange(&snapshot).await {
+        Ok(merged) => {
+            let mut next = ctx.doc.peek().clone();
+            next.merge(&merged);
+            // Only touch the signal when something actually changed, so a quiet
+            // poll doesn't re-render the whole board every twenty seconds.
+            if next != *ctx.doc.peek() {
+                ctx.doc.set(next);
+            }
+            let now = platform::now_ms();
+            ctx.last_sync.set(now);
+            ctx.sync.set(Status::Synced { at: now });
+        }
+        Err(message) => {
+            ctx.sync.set(Status::Failed { message });
+            // Keep the change queued so the next tick tries again.
+            ctx.dirty.set(true);
+        }
+    }
+}
+
+/// Gives a genuinely empty calendar something to light. Runs only after sync
+/// has had its chance to supply the goals, so devices don't each mint one.
+fn ensure_a_goal(ctx: Ctx) {
+    if !ctx.doc.peek().goal_ids().is_empty() {
+        return;
+    }
+    let (id, record) = storage::starter_goal(&ctx.device.peek());
+    let mut doc = ctx.doc;
+    doc.write().put_goal(&id, record);
+    touch(ctx);
+}
+
+pub fn sync_now(ctx: Ctx) {
+    if ctx.sync.peek().is_local() {
+        return;
+    }
+    spawn(exchange(ctx));
+}
+
 pub fn App() -> Element {
     let ctx = use_hook(|| {
-        let state = store::load();
-        let today = date::today();
-        let reduced_motion = prefers_reduced_motion();
-        let boot = state.boot_sequence && !reduced_motion;
+        let device = storage::device_id();
+        let doc = storage::load_doc(&device);
+        let prefs = storage::load_prefs();
+        let today = platform::today();
+        let boot = prefs.boot_sequence && !platform::prefers_reduced_motion();
+
         Ctx {
             year: Signal::new(today.year),
             month: Signal::new(today.month_day().0),
             focus: Signal::new(today.ordinal),
-            state: Signal::new(state),
+            doc: Signal::new(doc),
+            prefs: Signal::new(prefs),
+            device: Signal::new(device),
             today: Signal::new(today),
             flipped: Signal::new(false),
             booting: Signal::new(boot),
@@ -333,17 +418,18 @@ pub fn App() -> Element {
             toast: Signal::new(None),
             burst: Signal::new(None),
             announce: Signal::new(String::new()),
+            sync: Signal::new(Status::Local),
+            dirty: Signal::new(false),
+            last_sync: Signal::new(0),
             counter: Signal::new(0),
         }
     });
     use_context_provider(|| ctx);
 
-    // Every change is written straight back to localStorage; there is nowhere
-    // else for it to go.
-    use_effect(move || {
-        let state = ctx.state.read();
-        store::save(&state);
-    });
+    // The browser's copy is written on every change. It is the source of truth
+    // for rendering, with or without a server.
+    use_effect(move || storage::save_doc(&ctx.doc.read()));
+    use_effect(move || storage::save_prefs(&ctx.prefs.read()));
 
     // The power-on light sweep runs exactly once per load, then gets out of
     // the way.
@@ -357,13 +443,43 @@ pub fn App() -> Element {
         }
     });
 
-    let state = ctx.state.read();
-    let theme = state.theme.slug();
-    let accent = state.active_goal().accent.slug();
-    let view = state.view;
-    let brightness = state.brightness;
-    let ritual = state.ritual;
-    drop(state);
+    // Sync, if a server answers at this origin.
+    use_hook(|| {
+        spawn(async move {
+            if !sync::available().await {
+                ensure_a_goal(ctx);
+                return;
+            }
+            // The first exchange runs before any starter goal is minted, so a
+            // new device adopts the goals already on the server instead of
+            // adding a duplicate of its own.
+            exchange(ctx).await;
+            ensure_a_goal(ctx);
+            loop {
+                TimeoutFuture::new(SYNC_TICK_MS).await;
+                let stale =
+                    platform::now_ms().saturating_sub(*ctx.last_sync.peek()) > SYNC_POLL_MS;
+                if (*ctx.dirty.peek() || stale) && platform::is_visible() {
+                    exchange(ctx).await;
+                }
+            }
+        })
+    });
+
+    let prefs = ctx.prefs.read();
+    let theme = prefs.theme.slug();
+    let view = prefs.view;
+    let brightness = prefs.brightness;
+    let ritual = prefs.ritual;
+    drop(prefs);
+
+    let goal_id = ctx.goal_id();
+    let accent = ctx
+        .doc
+        .read()
+        .goal(&goal_id)
+        .map(|record| record.accent.slug())
+        .unwrap_or("gold");
 
     let booting = *ctx.booting.read();
     let flipped = *ctx.flipped.read();
@@ -450,15 +566,15 @@ fn ToastBar() -> Element {
         return rsx! {};
     };
     let text = toast.text.clone();
-    let undo = toast.undo;
+    let undo = toast.undo.clone();
 
     rsx! {
         div { class: "toast", role: "status",
             span { "{text}" }
-            if let Some((index, year, bits)) = undo {
+            if let Some((goal, year, bits)) = undo {
                 button {
                     class: "link",
-                    onclick: move |_| undo_reset(ctx, index, year, bits),
+                    onclick: move |_| undo_reset(ctx, goal.clone(), year, bits),
                     "Undo"
                 }
             }
@@ -494,11 +610,21 @@ fn Celebration() -> Element {
 
 #[component]
 fn Fineprint() -> Element {
+    let ctx = use_ctx();
+    let local = ctx.sync.read().is_local();
+
     rsx! {
         footer { class: "fineprint",
-            p {
-                "Everything you tap is stored in this browser and nowhere else. "
-                "0% internet-connected, same as the real thing."
+            if local {
+                p {
+                    "Everything you tap is stored in this browser and nowhere else. "
+                    "0% internet-connected, same as the real thing."
+                }
+            } else {
+                p {
+                    "Your days live on your own sync server and nowhere else. "
+                    "No account, no third party."
+                }
             }
             p {
                 "After "
