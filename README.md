@@ -11,8 +11,8 @@ streak totals and a brightness dimmer
 below.](docs/screenshot-year.png)
 
 This is a rewrite of [zmxv/everydaycalendar][original], the original HTML5
-edition, with the parts of the hardware — and of the Kickstarter pitch — that
-the web version never had.
+edition. It puts back the parts of the hardware, and of the Kickstarter
+pitch, that the web version never had.
 
 ## What's here that wasn't before
 
@@ -24,14 +24,14 @@ makes the object work.
 | --- | --- | --- |
 | **The goal** | Never asked | Named, editable, printed on the board's silkscreen |
 | **Press and hold** | Instant click toggle | A day only changes after a deliberate hold, and clearing one takes longer than lighting it |
-| **Reset** | Click 365 pads | Hold January 1 for ten seconds, exactly like the hardware — with Undo |
-| **Brightness** | — | A dimmer, like the knob on the back of the real board |
-| **Power-on sequence** | — | The light sweep the hardware runs at boot |
-| **Streaks** | — | Current streak, longest streak, trailing year, all-time, and a milestone bar |
+| **Reset** | Click 365 pads | Hold January 1 for ten seconds, exactly like the hardware, with Undo |
+| **Brightness** | Not there | A dimmer, like the knob on the back of the real board |
+| **Power-on sequence** | Not there | The light sweep the hardware runs at boot |
+| **Streaks** | Not there | Current streak, longest streak, trailing year, all-time, and a milestone bar |
 | **Today** | Indistinguishable | Ringed and pulsing, and the streak warns you while today is still dark |
 | **More than one habit** | Explicitly punted to another app | Up to eight goals, each with its own glow |
 | **Phones** | Explicitly punted to another app | Responsive, plus a large-pad month view |
-| **Keyboard** | — | Full arrow-key navigation, hold on Space or Enter, live region for screen readers |
+| **Keyboard** | Not there | Full arrow-key navigation, hold on Space or Enter, live region for screen readers |
 | **Your data** | `localStorage`, plus Google Analytics | `localStorage`, plus JSON export/import, and no analytics at all |
 | **Several devices** | Separate calendars | One shared calendar, via an optional server you run yourself |
 
@@ -45,9 +45,9 @@ dark theme:
 
 Two things from the original are kept on purpose:
 
-- **Quick-tap mode.** Settings → *Press and hold to change a day* → off restores
+- Quick-tap mode. Settings → *Press and hold to change a day* → off restores
   the original instant-toggle behaviour, drag-to-paint included.
-- **The save format.** Each year is still packed into the same 61-character,
+- The save format. Each year is still packed into the same 61-character,
   six-bits-per-character string. Saves from `everydaycalendar.app` in this
   browser are picked up automatically the first time you load this app.
 
@@ -63,7 +63,7 @@ dx build --platform web --release
 ```
 
 The release build lands in `target/dx/everydaycalendar/release/web/public` and
-is a plain static directory — copy it anywhere that serves files.
+is a plain static directory. Copy it anywhere that serves files.
 
 ```sh
 cargo test --workspace         # date maths, the save codec, streaks, the merge
@@ -72,8 +72,8 @@ cargo test --workspace         # date maths, the save codec, streaks, the merge
 ## Sharing days between devices
 
 By default nothing leaves the browser, which means your phone and your laptop
-keep separate calendars. `edc-sync` is an optional server that gives them one
-shared calendar without giving anyone else a copy.
+keep separate calendars. `edc-sync` is an optional server that joins them into
+one calendar without handing anyone else a copy.
 
 ```sh
 cd web && dx build --platform web --release && cd ..
@@ -83,21 +83,21 @@ cargo run --release -p edc-sync -- \
 ```
 
 It listens on `0.0.0.0:8080` and serves the app and the API from the same
-origin, so any device on your network just opens
+origin, so any device on your network opens
 `http://<your-machine>:8080`. Off your network, put
 [Tailscale](https://tailscale.com/) on both machines and use the Tailscale
-address — no ports opened, nothing exposed to the internet.
+address. No ports opened, nothing exposed to the internet.
 
 The client notices the server on its own: it probes `/api/health` at startup,
 and falls back to browser-only storage when nothing answers. The console shows
 which mode you're in.
 
-**How the merge works.** Each day is its own last-write-wins register, stamped
+How the merge works: each day is its own last-write-wins register, stamped
 with a millisecond timestamp and a per-browser device id. Lighting the 4th on
-your phone and the 5th on your laptop keeps both — a whole-year bitset could
+your phone and the 5th on your laptop keeps both. A whole-year bitset could
 not do that. Clearing a day writes `lit: false` rather than deleting the
 entry, so a device that was offline during a reset can't resurrect what it
-still remembers. Every property here is covered by tests in `core/src/model.rs`.
+still remembers. Tests in `core/src/model.rs` cover every property here.
 
 Three things worth knowing before you rely on it:
 
@@ -135,7 +135,7 @@ server/              axum: merge, persist, serve the client
 ```
 
 The document lives in one `Signal<Doc>` provided through context; every write
-is mirrored to `localStorage` by a single effect, and a background task pushes
+goes to `localStorage` through a single effect, and a background task pushes
 it to the server when there is one. Pads take their state as props so a change
 re-renders only the pads it touched.
 
@@ -146,7 +146,7 @@ so the whole board scales from a phone to a desktop without a media query.
 ## Privacy
 
 With no sync server, nothing leaves your browser: no account, no analytics, no
-network requests after the page loads — the physical calendar is proudly 0%
+network requests after the page loads. The physical calendar is proudly 0%
 internet-connected, and so is this. With one, your days reach exactly the
 machine you chose to run it on. **Export backup** in Settings gives you a copy
 either way.
