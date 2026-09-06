@@ -1,0 +1,10 @@
+[package]
+name = "edc-core"
+description = "Shared data model for the Every Day Calendar: the day log, its merge, and streak arithmetic."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

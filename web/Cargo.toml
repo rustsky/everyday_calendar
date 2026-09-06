@@ -1,0 +1,38 @@
+[package]
+name = "everydaycalendar"
+description = "The Every Day Calendar, as a web app."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+edc-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+dioxus = { version = "0.7", features = ["web"] }
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+gloo-timers = { version = "0.4.0", features = ["futures"] }
+js-sys = "0.3.105"
+wasm-bindgen = "0.2.128"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3.105", features = [
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioParam",
+    "Blob",
+    "Document",
+    "DomRect",
+    "Element",
+    "GainNode",
+    "HtmlAnchorElement",
+    "HtmlElement",
+    "HtmlInputElement",
+    "MediaQueryList",
+    "OscillatorNode",
+    "OscillatorType",
+    "Storage",
+    "Url",
+    "VisibilityState",
+    "Window",
+] }
