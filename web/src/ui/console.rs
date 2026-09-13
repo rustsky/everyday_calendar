@@ -75,24 +75,17 @@ fn add_goal(mut ctx: Ctx) {
     ctx.dirty.set(true);
 }
 
-pub fn Console() -> Element {
+/// Year and view, carried on the front of the board. These two get reached for
+/// often enough that putting them behind a flip would be in the way.
+pub fn BoardNav() -> Element {
     let mut ctx = use_ctx();
-    let prefs = ctx.prefs.read();
-    let view = prefs.view;
-    let brightness = prefs.brightness;
-    let sound = prefs.sound;
-    let theme = prefs.theme;
-    let ritual = prefs.ritual;
-    drop(prefs);
-
+    let view = ctx.prefs.read().view;
     let year = *ctx.year.read();
     let today = *ctx.today.read();
-    let settings_open = *ctx.settings_open.read();
-    let flipped = *ctx.flipped.read();
     let on_today = year == today.year;
 
     rsx! {
-        section { class: "console", aria_label: "Controls",
+        div { class: "board-nav",
             div { class: "console-group",
                 button {
                     r#type: "button",
@@ -136,7 +129,22 @@ pub fn Console() -> Element {
                     "Month"
                 }
             }
+        }
+    }
+}
 
+/// The controls, which live on the back of the board now that nothing sits
+/// outside the frame. Flipping is triggered from the board itself.
+pub fn Controls() -> Element {
+    let mut ctx = use_ctx();
+    let prefs = ctx.prefs.read();
+    let brightness = prefs.brightness;
+    let sound = prefs.sound;
+    let theme = prefs.theme;
+    drop(prefs);
+
+    rsx! {
+        section { class: "controls", aria_label: "Controls",
             div { class: "console-group dimmer",
                 label { r#for: "brightness", "Brightness" }
                 input {
@@ -182,38 +190,9 @@ pub fn Console() -> Element {
                     },
                     if theme == Theme::Studio { "Midnight" } else { "Studio" }
                 }
-                button {
-                    r#type: "button",
-                    class: "button",
-                    class: if flipped { "is-on" },
-                    aria_pressed: flipped,
-                    onclick: move |_| {
-                        let next = !*ctx.flipped.peek();
-                        ctx.flipped.set(next);
-                    },
-                    if flipped { "Back to the board" } else { "Flip it over" }
-                }
-                button {
-                    r#type: "button",
-                    class: "button",
-                    class: if settings_open { "is-on" },
-                    aria_expanded: settings_open,
-                    onclick: move |_| {
-                        let next = !*ctx.settings_open.peek();
-                        ctx.settings_open.set(next);
-                    },
-                    "Settings"
-                }
             }
 
             SyncPill {}
-        }
-        p { class: "hint",
-            if ritual {
-                "Press and hold a day until it fills. Hold January 1 for ten seconds to clear the year."
-            } else {
-                "Tap a day to light it, or drag across several. Quick-tap mode is on."
-            }
         }
     }
 }

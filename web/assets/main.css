@@ -141,24 +141,6 @@ a {
    Masthead and goals
    -------------------------------------------------------------------------- */
 
-.masthead {
-  text-align: center;
-  max-width: 46ch;
-}
-
-.masthead h1 {
-  margin: 0;
-  font-size: clamp(24px, 4.4vw, 34px);
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
-
-.masthead p {
-  margin: 6px 0 0;
-  color: var(--ink-dim);
-  font-size: 15px;
-}
-
 .goalbar {
   display: flex;
   flex-wrap: wrap;
@@ -265,7 +247,7 @@ a {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .frame {
@@ -336,22 +318,14 @@ a {
 
 .silkscreen {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
   margin-bottom: clamp(8px, 1.6cqw, 14px);
   padding-bottom: 8px;
   border-bottom: 1px dashed rgba(198, 158, 74, 0.28);
   color: var(--silk);
-}
-
-.silk-goal {
-  font-size: clamp(11px, 2.4cqw, 15px);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .silk-streak {
@@ -958,14 +932,6 @@ input[type="range"]:focus-visible {
   background: var(--surface-line);
 }
 
-.hint {
-  margin: 0;
-  max-width: 56ch;
-  text-align: center;
-  font-size: 13px;
-  color: var(--ink-dim);
-}
-
 /* --------------------------------------------------------------------------
    Settings
    -------------------------------------------------------------------------- */
@@ -990,7 +956,7 @@ input[type="range"]:focus-visible {
   flex-wrap: wrap;
 }
 
-.settings-row > label,
+.settings-row > label:not(.button),
 .settings-label {
   min-width: 5.5rem;
   font-size: 13px;
@@ -1126,8 +1092,10 @@ input[type="text"]:focus-visible {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 100%;
-  padding: clamp(18px, 4vw, 34px);
+  padding: clamp(10px, 2.4vw, 20px) clamp(8px, 2vw, 16px)
+    clamp(12px, 2.6vw, 22px);
   border-radius: 4px;
   background: linear-gradient(180deg, #efe7d6, #e2d7c1);
   color: #2c2419;
@@ -1202,6 +1170,175 @@ input[type="text"]:focus-visible {
   color: inherit;
 }
 
+
+/* --------------------------------------------------------------------------
+   Everything on the board: goals in the silkscreen, controls behind it
+   -------------------------------------------------------------------------- */
+
+/* The goal switcher sits in the silkscreen header, on the bare PCB, so the
+   page-level surface colours do not apply. */
+.silkscreen .goalbar {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.silkscreen .goal-list {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.silkscreen .goal-chip {
+  padding: 4px 11px;
+  border-color: rgba(198, 158, 74, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--silk);
+  font-size: clamp(10px, 1.95cqw, 13px);
+}
+
+.silkscreen .goal-chip.is-active {
+  border-color: var(--led-2);
+  background: color-mix(in srgb, var(--led-2) 14%, transparent);
+  box-shadow: none;
+  color: var(--led-1);
+}
+
+.silkscreen .goal-add {
+  padding: 4px 10px;
+  border: 1px dashed rgba(198, 158, 74, 0.35);
+  border-radius: 999px;
+  background: none;
+  color: var(--silk);
+  font-size: clamp(10px, 1.8cqw, 12px);
+  cursor: pointer;
+}
+
+/* The flip control and the one line of instructions, both on the board. */
+.board-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: clamp(8px, 1.6cqw, 14px);
+  padding-top: 10px;
+  border-top: 1px dashed rgba(198, 158, 74, 0.28);
+}
+
+/* Year and view ride on the bare PCB, so they take silkscreen colours rather
+   than the page surface they were built for. */
+.board-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.board-foot .step,
+.board-foot .button,
+.board-foot .segmented {
+  border-color: rgba(198, 158, 74, 0.34);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--silk);
+}
+
+.board-foot .segmented .segment {
+  border-color: transparent;
+  background: transparent;
+  color: var(--silk);
+}
+
+.board-foot .segmented .segment.is-on {
+  border-color: var(--led-2);
+  background: color-mix(in srgb, var(--led-2) 16%, transparent);
+  color: var(--led-1);
+}
+
+.board-foot .year-readout {
+  color: var(--silk);
+  font-size: clamp(15px, 2.6cqw, 20px);
+}
+
+.board-foot .step,
+.board-foot .button,
+.board-foot .segment {
+  padding: 5px 12px;
+  font-size: clamp(11px, 1.9cqw, 13px);
+}
+
+.board-foot .step {
+  width: 30px;
+  padding: 5px 0;
+}
+
+.board-foot .button:disabled {
+  opacity: 0.4;
+}
+
+.board-foot .button {
+  flex: none;
+  border-color: rgba(198, 158, 74, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--silk);
+}
+
+/* Controls and settings now live on the backplate, which has its own ground. */
+.backplate .controls {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+  gap: 10px 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--log-rule);
+}
+
+.backplate .button,
+.backplate .segment,
+.backplate .step {
+  border-color: var(--log-rule);
+  background: rgba(127, 127, 127, 0.08);
+  color: inherit;
+}
+
+.backplate .segment.is-on,
+.backplate .button.is-on {
+  border-color: var(--led-2);
+  background: color-mix(in srgb, var(--led-2) 16%, transparent);
+}
+
+.backplate .settings input[type="text"] {
+  border-color: var(--log-rule);
+  background: rgba(127, 127, 127, 0.1);
+  color: inherit;
+}
+
+.backplate .settings {
+  max-width: none;
+  padding: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--log-rule);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+}
+
+.log-credit {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.6;
+}
+
+/* The back's foot matches the front's, with the rule in plate colours. */
+.backplate .board-foot {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--log-rule);
+}
+
 /* --------------------------------------------------------------------------
    The log: the back of the board
    -------------------------------------------------------------------------- */
@@ -1218,6 +1355,16 @@ input[type="text"]:focus-visible {
   --log-lit: var(--led-2);
   --log-empty: rgba(255, 255, 255, 0.09);
   --log-rule: rgba(255, 255, 255, 0.14);
+}
+
+.backplate-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.2vw, 24px);
 }
 
 .backplate-body.log {
@@ -1549,17 +1696,6 @@ input[type="text"]:focus-visible {
     opacity: 0;
     transform: scale(1.02);
   }
-}
-
-.fineprint {
-  max-width: 52ch;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--ink-dim);
-}
-
-.fineprint p {
-  margin: 4px 0;
 }
 
 .sr-only {
