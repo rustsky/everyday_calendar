@@ -1100,7 +1100,8 @@ input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: clamp(18px, 4vw, 34px);
+  padding: clamp(10px, 2.4vw, 20px) clamp(8px, 2vw, 16px)
+    clamp(12px, 2.6vw, 22px);
   border-radius: 4px;
   background: linear-gradient(180deg, #efe7d6, #e2d7c1);
   color: #2c2419;
@@ -1283,8 +1284,15 @@ input[type="text"]:focus-visible {
 .log-credit {
   margin: 0;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
   opacity: 0.6;
+}
+
+/* The back's foot matches the front's, with the rule in plate colours. */
+.backplate .board-foot {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--log-rule);
 }
 
 /* --------------------------------------------------------------------------

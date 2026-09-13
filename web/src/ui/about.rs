@@ -14,7 +14,7 @@ pub struct AboutProps {
 }
 
 pub fn About(props: AboutProps) -> Element {
-    let ctx = use_ctx();
+    let mut ctx = use_ctx();
     let goal = ctx.goal_id();
     let today = *ctx.today.read();
     let stats = ctx.stats();
@@ -100,7 +100,11 @@ pub fn About(props: AboutProps) -> Element {
                 }
 
                 console::Settings {}
+            }
 
+            // Mirrors the foot of the front face, so the control that flips the
+            // board back sits exactly where the one that flipped it was.
+            div { class: "board-foot",
                 p { class: "log-credit",
                     "After "
                     a { href: "https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar",
@@ -109,6 +113,12 @@ pub fn About(props: AboutProps) -> Element {
                     ", after the original web edition by "
                     a { href: "https://github.com/zmxv/everydaycalendar", "Zhen Wang" }
                     ". Not affiliated with Simone Giertz or Yetch."
+                }
+                button {
+                    r#type: "button",
+                    class: "button",
+                    onclick: move |_| ctx.flipped.set(false),
+                    "Back to the board"
                 }
             }
         }

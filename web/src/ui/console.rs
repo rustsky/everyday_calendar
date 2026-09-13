@@ -181,12 +181,6 @@ pub fn Controls() -> Element {
                     },
                     if theme == Theme::Studio { "Midnight" } else { "Studio" }
                 }
-                button {
-                    r#type: "button",
-                    class: "button",
-                    onclick: move |_| ctx.flipped.set(false),
-                    "Back to the board"
-                }
             }
 
             SyncPill {}
