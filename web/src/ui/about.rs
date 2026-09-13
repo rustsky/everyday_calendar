@@ -3,12 +3,18 @@
 
 use dioxus::prelude::*;
 use edc_core::date;
+use edc_core::prefs::View;
 use edc_core::stats::{self, Stats};
 
 use super::use_ctx;
 
-pub fn About() -> Element {
-    let mut ctx = use_ctx();
+#[derive(Props, Clone, PartialEq)]
+pub struct AboutProps {
+    pub view: View,
+}
+
+pub fn About(props: AboutProps) -> Element {
+    let ctx = use_ctx();
     let goal = ctx.goal_id();
     let today = *ctx.today.read();
     let stats = ctx.stats();
@@ -39,7 +45,9 @@ pub fn About() -> Element {
                 span { class: "hanger" }
             }
 
-            div { class: "backplate-body log",
+            div {
+                class: "backplate-body log",
+                class: if props.view == View::Month { "is-compact" },
                 div { class: "log-head",
                     h2 { "All time" }
                     span { class: "log-total", "{total} days lit" }
@@ -89,25 +97,6 @@ pub fn About() -> Element {
                     }
                 }
 
-                div { class: "log-credit",
-                    p {
-                        "After Simone Giertz's "
-                        a { href: "https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar",
-                            "Every Day Calendar"
-                        }
-                        ", 2018. Original web edition by "
-                        a { href: "https://github.com/zmxv/everydaycalendar", "Zhen Wang" }
-                        "."
-                    }
-                    p { "Your days live in this browser. No account, no analytics." }
-                }
-
-                button {
-                    r#type: "button",
-                    class: "button",
-                    onclick: move |_| ctx.flipped.set(false),
-                    "Back to the board"
-                }
             }
         }
     }

@@ -1124,6 +1124,8 @@ input[type="text"]:focus-visible {
 
 .backplate {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
   padding: clamp(18px, 4vw, 34px);
   border-radius: 4px;
@@ -1218,6 +1220,14 @@ input[type="text"]:focus-visible {
   --log-rule: rgba(255, 255, 255, 0.14);
 }
 
+.backplate-body.log {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.2vw, 24px);
+}
+
 .log-head {
   display: flex;
   align-items: baseline;
@@ -1247,7 +1257,11 @@ input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin-top: 18px;
+}
+
+.log-year {
+  display: flex;
+  flex-direction: column;
 }
 
 .log-year-head {
@@ -1272,7 +1286,7 @@ input[type="text"]:focus-visible {
    dozen elements rather than 366. */
 .log-track {
   position: relative;
-  height: clamp(20px, 4.4vw, 34px);
+  height: clamp(22px, 3vw, 34px);
   border-radius: 3px;
   background: var(--log-empty);
   overflow: hidden;
@@ -1289,7 +1303,6 @@ input[type="text"]:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--log-rule);
 }
@@ -1322,7 +1335,7 @@ input[type="text"]:focus-visible {
 }
 
 .backplate-body .milestone {
-  margin-top: 20px;
+  margin: 0;
 }
 
 .backplate-body .milestone-track {
@@ -1330,7 +1343,6 @@ input[type="text"]:focus-visible {
 }
 
 .log-weekdays {
-  margin-top: 26px;
   padding-top: 20px;
   border-top: 1px solid var(--log-rule);
 }
@@ -1376,16 +1388,50 @@ input[type="text"]:focus-visible {
   opacity: 0.6;
 }
 
-.log-credit {
-  margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid var(--log-rule);
+/* Backing the month board: short and wide instead of tall, so the same
+   sections run in two columns rather than one. */
+.backplate-body.log.is-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: auto auto auto 1fr;
+  grid-template-areas:
+    "head  head"
+    "years figures"
+    "years milestone"
+    "years weekdays";
+  gap: 16px 28px;
 }
 
-.log-credit p {
-  margin: 0 0 4px;
-  font-size: 12.5px;
-  opacity: 0.65;
+.log.is-compact .log-head {
+  grid-area: head;
+}
+
+.log.is-compact .log-years,
+.log.is-compact .log-empty {
+  grid-area: years;
+}
+
+.log.is-compact .log-track {
+  height: clamp(20px, 2.4vw, 28px);
+}
+
+.log.is-compact .log-figures {
+  grid-area: figures;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.log.is-compact .milestone {
+  grid-area: milestone;
+}
+
+.log.is-compact .log-weekdays {
+  grid-area: weekdays;
+  align-self: start;
+}
+
+.log.is-compact .log-figure-value {
+  font-size: clamp(21px, 3.6vw, 27px);
 }
 
 /* --------------------------------------------------------------------------

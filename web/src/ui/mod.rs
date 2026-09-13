@@ -540,7 +540,7 @@ pub fn App() -> Element {
                         aria_hidden: !flipped,
                         div { class: "frame",
                             Bolts {}
-                            about::About {}
+                            about::About { view }
                         }
                     }
                 }
@@ -659,6 +659,8 @@ fn Fineprint() -> Element {
                 a { href: "https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar",
                     "Simone Giertz's Every Day Calendar"
                 }
+                ", after the original web edition by "
+                a { href: "https://github.com/zmxv/everydaycalendar", "Zhen Wang" }
                 ". Not affiliated with Simone Giertz or Yetch."
             }
         }
