@@ -194,6 +194,18 @@ impl Doc {
             .is_some_and(|op| op.lit)
     }
 
+    /// Years holding at least one lit day, oldest first. Drives the log on the
+    /// back of the board.
+    pub fn years(&self, goal: &str) -> Vec<i32> {
+        self.days.get(goal).map_or_else(Vec::new, |years| {
+            years
+                .iter()
+                .filter(|(_, days)| days.values().any(|op| op.lit))
+                .map(|(year, _)| *year)
+                .collect()
+        })
+    }
+
     pub fn year_bits(&self, goal: &str, year: i32) -> YearBits {
         let mut bits = YearBits::default();
         if let Some(days) = self.days.get(goal).and_then(|years| years.get(&year)) {

@@ -58,3 +58,33 @@ jobs:
 
       - name: Build
         run: cargo build -p everydaycalendar --target wasm32-unknown-unknown --release
+
+  # The one check branch protection requires. It always runs, so a failed or
+  # cancelled job above turns it red instead of leaving it pending.
+  ci-result:
+    name: CI result
+    needs: [native, wasm]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        env:
+          NATIVE: ${{ needs.native.result }}
+          WASM: ${{ needs.wasm.result }}
+        run: |
+          icon() { [ "$1" = success ] && echo "✅" || echo "❌"; }
+          {
+            echo "## CI result"
+            echo
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "| Format, lint, test | $(icon "$NATIVE") $NATIVE |"
+            echo "| Build the client for wasm | $(icon "$WASM") $WASM |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$NATIVE" = success ] && [ "$WASM" = success ]; then
+            echo "::notice title=CI passed::All checks passed. Safe to merge."
+          else
+            echo "::error title=CI failed::native=$NATIVE wasm=$WASM. Merge blocked."
+            exit 1
+          fi
