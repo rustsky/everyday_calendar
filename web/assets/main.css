@@ -247,7 +247,7 @@ a {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .frame {
@@ -1091,6 +1091,7 @@ input[type="text"]:focus-visible {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 100%;
   padding: clamp(10px, 2.4vw, 20px) clamp(8px, 2vw, 16px)
     clamp(12px, 2.6vw, 22px);
@@ -1345,6 +1346,16 @@ input[type="text"]:focus-visible {
   --log-lit: var(--led-2);
   --log-empty: rgba(255, 255, 255, 0.09);
   --log-rule: rgba(255, 255, 255, 0.14);
+}
+
+.backplate-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.2vw, 24px);
 }
 
 .backplate-body.log {

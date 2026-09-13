@@ -45,61 +45,66 @@ pub fn About(props: AboutProps) -> Element {
                 span { class: "hanger" }
             }
 
-            console::Controls {}
+            // The back holds more than a month-height board can show, so the
+            // middle scrolls and the foot stays put.
+            div { class: "backplate-scroll",
 
-            div {
-                class: "backplate-body log",
-                class: if props.view == View::Month { "is-compact" },
-                div { class: "log-head",
-                    h2 { "All time" }
-                    span { class: "log-total", "{total} days lit" }
-                }
+                console::Controls {}
 
-                if years.is_empty() {
-                    p { class: "log-empty",
-                        "Nothing logged yet. Light a day on the front and it shows up here."
+                div {
+                    class: "backplate-body log",
+                    class: if props.view == View::Month { "is-compact" },
+                    div { class: "log-head",
+                        h2 { "All time" }
+                        span { class: "log-total", "{total} days lit" }
                     }
-                } else {
-                    div { class: "log-years",
-                        for row in years.iter() {
-                            LogYear { key: "{row.year}", row: row.clone() }
+
+                    if years.is_empty() {
+                        p { class: "log-empty",
+                            "Nothing logged yet. Light a day on the front and it shows up here."
                         }
-                    }
-                }
-
-                div { class: "log-figures",
-                    Figure { label: "Current", value: stats.current }
-                    Figure { label: "Longest", value: stats.longest }
-                    Figure { label: "Last 365", value: stats.last_year }
-                }
-
-                MilestoneBar { stats }
-
-                section { class: "log-weekdays", aria_label: "Completion by weekday",
-                    h3 { "By weekday" }
-                    div { class: "weekday-bars",
-                        for (index , name) in date::WEEKDAYS_SHORT.iter().enumerate() {
-                            div { key: "{index}", class: "weekday-bar",
-                                div {
-                                    class: "weekday-track",
-                                    role: "progressbar",
-                                    aria_valuemin: 0,
-                                    aria_valuemax: 100,
-                                    aria_valuenow: rates[index].percent() as i64,
-                                    aria_label: "{date::WEEKDAYS_LONG[index]}",
-                                    span {
-                                        class: "weekday-fill",
-                                        style: "width: {rates[index].percent()}%;",
-                                    }
-                                }
-                                span { class: "weekday-name", "{name}" }
-                                span { class: "weekday-pct", "{rates[index].percent()}%" }
+                    } else {
+                        div { class: "log-years",
+                            for row in years.iter() {
+                                LogYear { key: "{row.year}", row: row.clone() }
                             }
                         }
                     }
-                }
 
-                console::Settings {}
+                    div { class: "log-figures",
+                        Figure { label: "Current", value: stats.current }
+                        Figure { label: "Longest", value: stats.longest }
+                        Figure { label: "Last 365", value: stats.last_year }
+                    }
+
+                    MilestoneBar { stats }
+
+                    section { class: "log-weekdays", aria_label: "Completion by weekday",
+                        h3 { "By weekday" }
+                        div { class: "weekday-bars",
+                            for (index , name) in date::WEEKDAYS_SHORT.iter().enumerate() {
+                                div { key: "{index}", class: "weekday-bar",
+                                    div {
+                                        class: "weekday-track",
+                                        role: "progressbar",
+                                        aria_valuemin: 0,
+                                        aria_valuemax: 100,
+                                        aria_valuenow: rates[index].percent() as i64,
+                                        aria_label: "{date::WEEKDAYS_LONG[index]}",
+                                        span {
+                                            class: "weekday-fill",
+                                            style: "width: {rates[index].percent()}%;",
+                                        }
+                                    }
+                                    span { class: "weekday-name", "{name}" }
+                                    span { class: "weekday-pct", "{rates[index].percent()}%" }
+                                }
+                            }
+                        }
+                    }
+
+                    console::Settings {}
+                }
             }
 
             // Mirrors the foot of the front face, so the control that flips the
