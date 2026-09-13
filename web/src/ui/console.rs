@@ -1,44 +1,41 @@
 //! Everything around the board: goals, the readout, the dimmer, and settings.
 
 use dioxus::prelude::*;
-use gloo_timers::future::TimeoutFuture;
-use wasm_bindgen::{JsCast, JsValue};
+use edc_core::legacy;
+use edc_core::model::{Accent, GoalId, GoalRecord};
+use edc_core::prefs::{Theme, View};
+use edc_core::stats::Stats;
 
-use super::{Ctx, go_to_year, reset_year, show_toast, use_ctx};
-use crate::date::Date;
-use crate::stats::Stats;
-use crate::store::{self, Accent, Goal, Theme, View};
+use super::{Ctx, go_to_year, reset_year, show_toast, sync_now, use_ctx};
+use crate::{platform, storage};
 
 pub fn GoalBar() -> Element {
     let mut ctx = use_ctx();
-    let state = ctx.state.read();
-    let goals: Vec<(usize, String, &'static str, bool)> = state
-        .goals
-        .iter()
-        .enumerate()
-        .map(|(index, goal)| {
-            (
-                index,
-                goal.name.clone(),
-                goal.accent.slug(),
-                index == state.active,
-            )
+    let active = ctx.goal_id();
+    let doc = ctx.doc.read();
+    let goals: Vec<(GoalId, String, &'static str, bool)> = doc
+        .goal_ids()
+        .into_iter()
+        .filter_map(|id| {
+            let record = doc.goal(&id)?;
+            let is_active = id == active;
+            Some((id, record.name.clone(), record.accent.slug(), is_active))
         })
         .collect();
-    let can_add = state.goals.len() < 8;
-    drop(state);
+    let can_add = goals.len() < 8;
+    drop(doc);
 
     rsx! {
         nav { class: "goalbar", aria_label: "Goals",
             ul { class: "goal-list",
-                for (index , name , accent , active) in goals {
-                    li { key: "{index}",
+                for (id , name , accent , is_active) in goals {
+                    li { key: "{id}",
                         button {
                             r#type: "button",
                             class: "goal-chip accent-{accent}",
-                            class: if active { "is-active" },
-                            aria_pressed: active,
-                            onclick: move |_| ctx.state.write().active = index,
+                            class: if is_active { "is-active" },
+                            aria_pressed: is_active,
+                            onclick: move |_| ctx.prefs.write().active = Some(id.clone()),
                             span { class: "goal-dot", aria_hidden: "true" }
                             "{name}"
                         }
@@ -49,17 +46,34 @@ pub fn GoalBar() -> Element {
                 button {
                     r#type: "button",
                     class: "goal-add",
-                    onclick: move |_| {
-                        let mut state = ctx.state.write();
-                        let accent = Accent::ALL[state.goals.len() % Accent::ALL.len()];
-                        state.goals.push(Goal::new("New goal", accent));
-                        state.active = state.goals.len() - 1;
-                    },
+                    onclick: move |_| add_goal(ctx),
                     "+ Add a goal"
                 }
             }
         }
     }
+}
+
+fn add_goal(mut ctx: Ctx) {
+    let id = platform::random_id();
+    let stamp = ctx.stamp();
+    {
+        let mut doc = ctx.doc;
+        let order = doc.peek().next_order();
+        let accent = Accent::ALL[(order as usize) % Accent::ALL.len()];
+        doc.write().put_goal(
+            &id,
+            GoalRecord {
+                name: "New goal".to_string(),
+                accent,
+                deleted: false,
+                order,
+                stamp,
+            },
+        );
+    }
+    ctx.prefs.write().active = Some(id);
+    ctx.dirty.set(true);
 }
 
 pub fn Readout() -> Element {
@@ -71,20 +85,19 @@ pub fn Readout() -> Element {
         .map(|t| (stats.current as f32 / t as f32 * 100.0).clamp(0.0, 100.0))
         .unwrap_or(100.0);
 
+    let current_unit = if stats.current == 1 { "day" } else { "days" };
+    let year_unit = format!("of {} · {}%", stats.year_days, stats.year_percent());
+
     rsx! {
         section { class: "readout", aria_label: "Progress",
             Tile {
                 label: "Current streak",
                 value: "{stats.current}",
-                unit: if stats.current == 1 { "day" } else { "days" },
+                unit: "{current_unit}",
                 emphasis: true,
             }
             Tile { label: "Longest streak", value: "{stats.longest}", unit: "days" }
-            Tile {
-                label: "{year}",
-                value: "{stats.year_lit}",
-                unit: "of {stats.year_days} · {stats.year_percent()}%",
-            }
+            Tile { label: "{year}", value: "{stats.year_lit}", unit: "{year_unit}" }
             Tile { label: "Last 365 days", value: "{stats.last_year}", unit: "days" }
             Tile { label: "All time", value: "{stats.total}", unit: "days" }
         }
@@ -126,15 +139,13 @@ fn MilestoneBar(props: MilestoneProps) -> Element {
         Some(target) if stats.current == 0 => {
             format!("Light today to start a streak. First milestone: {target} days.")
         }
-        Some(target) => format!(
-            "{} more {} to {target}.",
-            target - stats.current,
-            if target - stats.current == 1 {
-                "day"
-            } else {
-                "days"
-            }
-        ),
+        Some(target) => {
+            let left = target - stats.current;
+            format!(
+                "{left} more {} to {target}.",
+                if left == 1 { "day" } else { "days" }
+            )
+        }
         None => "Past every milestone. Keep going.".to_string(),
     };
 
@@ -149,7 +160,8 @@ fn MilestoneBar(props: MilestoneProps) -> Element {
                 aria_label: "Progress to next milestone",
                 span { class: "milestone-fill", style: "width: {props.progress}%;" }
             }
-            p { class: "milestone-caption",
+            p {
+                class: "milestone-caption",
                 class: if stats.at_risk { "is-warning" },
                 if stats.at_risk {
                     "Today is still dark. "
@@ -162,12 +174,13 @@ fn MilestoneBar(props: MilestoneProps) -> Element {
 
 pub fn Console() -> Element {
     let mut ctx = use_ctx();
-    let state = ctx.state.read();
-    let view = state.view;
-    let brightness = state.brightness;
-    let sound = state.sound;
-    let theme = state.theme;
-    drop(state);
+    let prefs = ctx.prefs.read();
+    let view = prefs.view;
+    let brightness = prefs.brightness;
+    let sound = prefs.sound;
+    let theme = prefs.theme;
+    let ritual = prefs.ritual;
+    drop(prefs);
 
     let year = *ctx.year.read();
     let today = *ctx.today.read();
@@ -208,7 +221,7 @@ pub fn Console() -> Element {
                     class: "segment",
                     class: if view == View::Year { "is-on" },
                     aria_pressed: view == View::Year,
-                    onclick: move |_| ctx.state.write().view = View::Year,
+                    onclick: move |_| ctx.prefs.write().view = View::Year,
                     "Year"
                 }
                 button {
@@ -216,7 +229,7 @@ pub fn Console() -> Element {
                     class: "segment",
                     class: if view == View::Month { "is-on" },
                     aria_pressed: view == View::Month,
-                    onclick: move |_| ctx.state.write().view = View::Month,
+                    onclick: move |_| ctx.prefs.write().view = View::Month,
                     "Month"
                 }
             }
@@ -232,7 +245,7 @@ pub fn Console() -> Element {
                     value: "{brightness}",
                     oninput: move |event| {
                         if let Ok(value) = event.value().parse::<u8>() {
-                            ctx.state.write().brightness = value.min(100);
+                            ctx.prefs.write().brightness = value.min(100);
                         }
                     },
                 }
@@ -246,8 +259,8 @@ pub fn Console() -> Element {
                     class: if sound { "is-on" },
                     aria_pressed: sound,
                     onclick: move |_| {
-                        let mut state = ctx.state.write();
-                        state.sound = !state.sound;
+                        let mut prefs = ctx.prefs.write();
+                        prefs.sound = !prefs.sound;
                     },
                     if sound { "Sound on" } else { "Sound off" }
                 }
@@ -256,8 +269,9 @@ pub fn Console() -> Element {
                     class: "button",
                     aria_pressed: theme == Theme::Midnight,
                     onclick: move |_| {
-                        let mut state = ctx.state.write();
-                        state.theme = if state.theme == Theme::Studio {
+                        let mut prefs = ctx.prefs.write();
+                        prefs
+                            .theme = if prefs.theme == Theme::Studio {
                             Theme::Midnight
                         } else {
                             Theme::Studio
@@ -288,9 +302,11 @@ pub fn Console() -> Element {
                     "Settings"
                 }
             }
+
+            SyncPill {}
         }
         p { class: "hint",
-            if ctx.state.read().ritual {
+            if ritual {
                 "Press and hold a day until it fills. Hold January 1 for ten seconds to clear the year."
             } else {
                 "Tap a day to light it, or drag across several. Quick-tap mode is on."
@@ -299,18 +315,54 @@ pub fn Console() -> Element {
     }
 }
 
+fn SyncPill() -> Element {
+    let ctx = use_ctx();
+    let status = ctx.sync.read().clone();
+    let local = status.is_local();
+
+    rsx! {
+        div { class: "console-group sync",
+            span {
+                class: "sync-pill sync-{status.slug()}",
+                title: "{status.detail()}",
+                span { class: "sync-dot", aria_hidden: "true" }
+                "{status.label()}"
+            }
+            if !local {
+                button {
+                    r#type: "button",
+                    class: "link",
+                    onclick: move |_| sync_now(ctx),
+                    "Sync now"
+                }
+            }
+        }
+    }
+}
+
 pub fn Settings() -> Element {
     let mut ctx = use_ctx();
-    let state = ctx.state.read();
-    let name = state.active_goal().name.clone();
-    let accent = state.active_goal().accent;
-    let ritual = state.ritual;
-    let boot = state.boot_sequence;
-    let can_delete = state.goals.len() > 1;
-    drop(state);
+    let goal_id = ctx.goal_id();
+    let doc = ctx.doc.read();
+    let record = doc.goal(&goal_id).cloned();
+    let can_delete = doc.goal_ids().len() > 1;
+    let day_entries = doc.day_entries();
+    drop(doc);
+
+    let Some(record) = record else {
+        return rsx! {};
+    };
+    let name = record.name.clone();
+    let accent = record.accent;
+
+    let prefs = ctx.prefs.read();
+    let ritual = prefs.ritual;
+    let boot = prefs.boot_sequence;
+    drop(prefs);
 
     let year = *ctx.year.read();
     let today = *ctx.today.read();
+    let device = ctx.device.read().clone();
 
     rsx! {
         section { class: "settings", aria_label: "Settings",
@@ -323,7 +375,11 @@ pub fn Settings() -> Element {
                     value: "{name}",
                     placeholder: "What are you doing every day?",
                     oninput: move |event| {
-                        ctx.state.write().active_goal_mut().name = event.value();
+                        let value = event.value();
+                        let stamp = ctx.stamp();
+                        let id = ctx.goal_id();
+                        ctx.doc.write().edit_goal(&id, stamp, |record| record.name = value);
+                        ctx.dirty.set(true);
                     },
                 }
             }
@@ -342,7 +398,10 @@ pub fn Settings() -> Element {
                             aria_label: "{option.label()}",
                             title: "{option.label()}",
                             onclick: move |_| {
-                                ctx.state.write().active_goal_mut().accent = option;
+                                let stamp = ctx.stamp();
+                                let id = ctx.goal_id();
+                                ctx.doc.write().edit_goal(&id, stamp, |record| record.accent = option);
+                                ctx.dirty.set(true);
                             },
                         }
                     }
@@ -354,14 +413,14 @@ pub fn Settings() -> Element {
                 label: "Press and hold to change a day",
                 hint: "Off turns the board back into a quick-tap toggle, like the original web app.",
                 checked: ritual,
-                on_toggle: move |value| ctx.state.write().ritual = value,
+                on_toggle: move |value| ctx.prefs.write().ritual = value,
             }
             Switch {
                 id: "boot",
                 label: "Power-on light sequence",
                 hint: "The sweep across the board when the page loads.",
                 checked: boot,
-                on_toggle: move |value| ctx.state.write().boot_sequence = value,
+                on_toggle: move |value| ctx.prefs.write().boot_sequence = value,
             }
 
             div { class: "settings-row settings-actions",
@@ -369,8 +428,8 @@ pub fn Settings() -> Element {
                     r#type: "button",
                     class: "button",
                     onclick: move |_| {
-                        let json = store::export_json(&ctx.state.peek());
-                        download_backup(&json, today);
+                        let json = legacy::export_json(&ctx.doc.peek());
+                        platform::download(&storage::export_filename(today), &json);
                     },
                     "Export backup"
                 }
@@ -385,25 +444,30 @@ pub fn Settings() -> Element {
                             return;
                         };
                         spawn(async move {
-                            match file.read_string().await {
-                                Ok(text) => match store::import_json(&text) {
-                                    Ok(imported) => {
-                                        let goals = imported.goals.len();
-                                        ctx.state.set(imported);
-                                        show_toast(
-                                            ctx,
-                                            format!(
-                                                "Imported {goals} {}.",
-                                                if goals == 1 { "goal" } else { "goals" },
-                                            ),
-                                            None,
-                                        );
-                                    }
-                                    Err(error) => {
-                                        show_toast(ctx, format!("That file didn't parse: {error}"), None)
-                                    }
-                                },
-                                Err(_) => show_toast(ctx, "Couldn't read that file.", None),
+                            let Ok(text) = file.read_string().await else {
+                                show_toast(ctx, "Couldn't read that file.", None);
+                                return;
+                            };
+                            let stamp = ctx.stamp();
+                            let outcome = {
+                                let mut doc = ctx.doc.write();
+                                legacy::import_json(&mut doc, &text, stamp, platform::random_id)
+                            };
+                            match outcome {
+                                Ok(count) => {
+                                    ctx.dirty.set(true);
+                                    show_toast(
+                                        ctx,
+                                        format!(
+                                            "Imported {count} {}.",
+                                            if count == 1 { "goal" } else { "goals" },
+                                        ),
+                                        None,
+                                    );
+                                }
+                                Err(error) => {
+                                    show_toast(ctx, format!("That file didn't parse: {error}"), None)
+                                }
                             }
                         });
                     },
@@ -436,6 +500,13 @@ pub fn Settings() -> Element {
                     dt { "Page Up and Page Down" }
                     dd { "Previous and next month." }
                 }
+            }
+
+            p { class: "settings-note",
+                "This device is "
+                code { "{device}" }
+                ". It stamps every change, and breaks ties when two devices "
+                "edit the same day. {day_entries} day writes stored."
             }
         }
     }
@@ -472,46 +543,27 @@ fn Switch(props: SwitchProps) -> Element {
     }
 }
 
+/// Deletion is a flag rather than a removal, so it survives a merge with a
+/// device that still has the goal.
 fn delete_active_goal(mut ctx: Ctx) {
-    let removed = {
-        let mut state = ctx.state.write();
-        if state.goals.len() <= 1 {
+    let id = ctx.goal_id();
+    let stamp = ctx.stamp();
+    let name = {
+        let mut doc = ctx.doc;
+        let name = doc
+            .peek()
+            .goal(&id)
+            .map(|record| record.name.clone())
+            .unwrap_or_default();
+        if doc.peek().goal_ids().len() <= 1 {
             return;
         }
-        let index = state.active;
-        let goal = state.goals.remove(index);
-        state.active = index.saturating_sub(1);
-        goal.name
+        doc.write().edit_goal(&id, stamp, |record| record.deleted = true);
+        name
     };
-    show_toast(ctx, format!("Deleted \"{removed}\"."), None);
-}
 
-/// Hands the browser a JSON file. Nothing leaves the machine.
-fn download_backup(json: &str, today: Date) {
-    let Some(document) = web_sys::window().and_then(|w| w.document()) else {
-        return;
-    };
-    let parts = js_sys::Array::new();
-    parts.push(&JsValue::from_str(json));
-
-    let Ok(blob) = web_sys::Blob::new_with_str_sequence(&parts) else {
-        return;
-    };
-    let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
-        return;
-    };
-    if let Ok(anchor) = document
-        .create_element("a")
-        .and_then(|el| el.dyn_into::<web_sys::HtmlAnchorElement>().map_err(Into::into))
-    {
-        anchor.set_href(&url);
-        anchor.set_download(&store::export_filename(today));
-        anchor.click();
-    }
-
-    // Firefox cancels the download if the object URL is revoked too eagerly.
-    spawn(async move {
-        TimeoutFuture::new(20_000).await;
-        let _ = web_sys::Url::revoke_object_url(&url);
-    });
+    let next = ctx.doc.peek().goal_ids().first().cloned();
+    ctx.prefs.write().active = next;
+    ctx.dirty.set(true);
+    show_toast(ctx, format!("Deleted \"{name}\"."), None);
 }

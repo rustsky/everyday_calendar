@@ -4,9 +4,9 @@
 #![allow(non_snake_case)]
 
 mod audio;
-mod date;
-mod stats;
-mod store;
+mod platform;
+mod storage;
+mod sync;
 mod ui;
 
 use dioxus::prelude::*;

@@ -146,12 +146,38 @@ impl Date {
     }
 }
 
-/// The browser's local "today".
-pub fn today() -> Date {
-    let now = js_sys::Date::new_0();
-    Date::new(
-        now.get_full_year() as i32,
-        now.get_month(),
-        now.get_date(),
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dates_step_across_year_boundaries() {
+        let jan1 = Date::new(2026, 0, 1);
+        let dec31 = jan1.prev();
+        assert_eq!(dec31.year, 2025);
+        assert_eq!(dec31.ordinal, 364);
+        assert_eq!(dec31.next(), jan1);
+
+        let leap_dec31 = Date::new(2024, 11, 31);
+        assert_eq!(leap_dec31.ordinal, 365);
+        assert_eq!(leap_dec31.next(), Date::new(2025, 0, 1));
+    }
+
+    #[test]
+    fn ordinals_round_trip() {
+        for year in [2024, 2025, 2026] {
+            for ordinal in 0..days_in_year(year) as usize {
+                let (month, day) = from_ordinal(year, ordinal);
+                assert_eq!(super::ordinal(year, month, day), ordinal);
+            }
+        }
+    }
+
+    #[test]
+    fn weekdays_match_known_dates() {
+        // 1 January 2026 was a Thursday; 1 February 2026 a Sunday.
+        assert_eq!(weekday(2026, 0, 1), 4);
+        assert_eq!(weekday(2026, 1, 1), 0);
+        assert_eq!(weekday(2024, 1, 29), 4);
+    }
 }

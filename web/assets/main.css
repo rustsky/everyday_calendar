@@ -879,6 +879,85 @@ input[type="range"]:focus-visible {
   outline-offset: 4px;
 }
 
+/* Sync status ------------------------------------------------------------ */
+
+.sync {
+  gap: 8px;
+}
+
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--surface-line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: 13px;
+  cursor: default;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+
+.sync-ok .sync-dot {
+  background: #3fb27f;
+  box-shadow: 0 0 8px rgba(63, 178, 127, 0.7);
+}
+
+.sync-syncing .sync-dot {
+  background: var(--led-2);
+  animation: sync-blink 1s ease-in-out infinite;
+}
+
+.sync-failed {
+  color: var(--danger);
+  border-color: rgba(212, 89, 63, 0.5);
+}
+
+.sync-failed .sync-dot {
+  background: var(--danger);
+}
+
+@keyframes sync-blink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.console .link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.settings-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+
+.settings-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-line);
+}
+
 .hint {
   margin: 0;
   max-width: 56ch;

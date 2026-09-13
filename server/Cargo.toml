@@ -1,0 +1,22 @@
+[package]
+name = "edc-sync"
+description = "A small LAN sync server for the Every Day Calendar."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "edc-sync"
+path = "src/main.rs"
+
+[dependencies]
+edc-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "fs", "net"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
