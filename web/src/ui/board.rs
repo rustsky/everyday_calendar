@@ -1,7 +1,6 @@
 //! The board itself: the PCB face, its silkscreen, and the 366 pads.
 
 use dioxus::prelude::*;
-use gloo_timers::future::TimeoutFuture;
 
 use super::{Ctx, console, go_to_month, paint, press, release, use_ctx};
 use crate::platform;
@@ -388,7 +387,7 @@ fn move_focus(mut ctx: Ctx, ord: usize) {
     ctx.focus.set(ord);
     // The target pad may not exist until the grid has re-rendered.
     spawn(async move {
-        TimeoutFuture::new(0).await;
+        platform::sleep(0).await;
         platform::focus(&format!("pad-{ord}"));
     });
 }

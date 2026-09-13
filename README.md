@@ -1,7 +1,8 @@
 # The Every Day Calendar
 
-A web recreation of [Simone Giertz's Every Day Calendar][kickstarter], rebuilt
-in Rust with [Dioxus][dioxus].
+A recreation of [Simone Giertz's Every Day Calendar][kickstarter], rebuilt in
+Rust with [Dioxus][dioxus]. It runs in the browser, and as a desktop app for
+macOS, Windows and Linux.
 
 Set one goal. Light one day at a time. Don't break the chain.
 
@@ -58,19 +59,50 @@ Two things from the original are kept on purpose:
   six-bits-per-character string. Saves from `everydaycalendar.app` in this
   browser are picked up automatically the first time you load this app.
 
+## Downloads
+
+Every [release][releases] carries a package per platform, each with everything
+it needs inside:
+
+| Platform | File | |
+| --- | --- | --- |
+| macOS, Apple silicon | `…-macos-arm64.dmg` | Drag to Applications |
+| macOS, Intel | `…-macos-x86_64.dmg` | Drag to Applications |
+| Windows 10 and 11 | `…-windows-x86_64-setup.exe` | Installs for your user, no administrator prompt |
+| Linux | `…-linux-x86_64.AppImage` | `chmod +x` it and run |
+| Web | `…-web.zip` | A static directory; serve it from anywhere |
+
+The builds are not signed with a paid certificate. On macOS, the first launch
+needs right-click → **Open**, or `xattr -dr com.apple.quarantine "/Applications/Every Day Calendar.app"`.
+On Windows, SmartScreen asks once: **More info** → **Run anyway**.
+
+The desktop app keeps its calendar in your user data directory
+(`~/Library/Application Support/everydaycalendar` on macOS,
+`%APPDATA%\everydaycalendar` on Windows, `~/.local/share/everydaycalendar` on
+Linux).
+
 ## Running it
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo install dioxus-cli --version 0.7 --locked
+cargo install dioxus-cli --version 0.7.10 --locked
 
 cd web
 dx serve --platform web        # http://127.0.0.1:8080
-dx build --platform web --release
+dx serve --platform desktop    # a native window
 ```
 
-The release build lands in `target/dx/everydaycalendar/release/web/public` and
-is a plain static directory. Copy it anywhere that serves files.
+To build what a release ships:
+
+```sh
+dx build --platform web --release
+dx bundle --desktop --release --package-types dmg        # or appimage, nsis
+```
+
+The web build lands in `target/dx/everydaycalendar/release/web/public` and is a
+plain static directory. Copy it anywhere that serves files. Desktop packages
+land in `web/dist`. On Linux, building (not running) the desktop app needs
+WebKitGTK's development headers; the list is in `.github/workflows/ci.yml`.
 
 ```sh
 cargo test --workspace         # date maths, the save codec, streaks, the merge
@@ -95,9 +127,11 @@ origin, so any device on your network opens
 [Tailscale](https://tailscale.com/) on both machines and use the Tailscale
 address. No ports opened, nothing exposed to the internet.
 
-The client notices the server on its own: it probes `/api/health` at startup,
-and falls back to browser-only storage when nothing answers. The console shows
-which mode you're in.
+The web client notices the server on its own: it probes `/api/health` at
+startup, and falls back to browser-only storage when nothing answers. The
+desktop app has no page origin to ask, so flip the board and put the server's
+address in **Sync server** (for example `http://my-mac:8080`). Leave it blank
+to keep everything on that computer. The console shows which mode you're in.
 
 How the merge works: each day is its own last-write-wins register, stamped
 with a millisecond timestamp and a per-browser device id. Lighting the 4th on
@@ -127,10 +161,14 @@ core/                a platform-free crate, compiled into both the client and th
   stats.rs           streaks, totals, milestones, and the weekday breakdown
   legacy.rs          backup format, import, and migration from older storage
   prefs.rs           device-local settings
-web/                 the Dioxus client
-  src/main.rs        launch, and the stylesheet asset
-  src/platform.rs    the browser edges: clock, randomness, focus, downloads
-  src/storage.rs     localStorage, and picking up older saves
+web/                 the Dioxus client, for the browser and the desktop
+  Dioxus.toml        app name, and how desktop packages are bundled
+  icons/             app icons, all rendered from icon.svg
+  src/main.rs        launch, the desktop window, and the stylesheet asset
+  src/platform/      clock, randomness, storage, timers, focus, downloads
+    web.rs           the browser: localStorage, a download link
+    desktop.rs       the desktop: files in the data directory, a save dialog
+  src/storage.rs     the local copy, and picking up older saves
   src/sync.rs        talking to the sync server, when there is one
   src/audio.rs       the optional chime, synthesised from oscillators
   src/ui/mod.rs      shared context, the hold/reset/undo rituals, root layout
@@ -142,8 +180,10 @@ server/              axum: merge, persist, serve the client
 ```
 
 The document lives in one `Signal<Doc>` provided through context; every write
-goes to `localStorage` through a single effect, and a background task pushes
-it to the server when there is one. Pads take their state as props so a change
+goes to local storage through a single effect, and a background task pushes
+it to the server when there is one. The `web` and `desktop` cargo features
+pick the renderer, and `src/platform/` is the only place the two builds differ
+underneath the UI. Pads take their state as props so a change
 re-renders only the pads it touched.
 
 The board is CSS, not images: hexagons are `clip-path` polygons, the bamboo
@@ -176,4 +216,5 @@ MIT licensed, same as the original.
 [kickstarter]: https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar
 [original]: https://github.com/zmxv/everydaycalendar
 [dioxus]: https://dioxuslabs.com/
+[releases]: https://github.com/rustsky/everyday_calendar/releases
 [yetch]: https://yetch.studio/

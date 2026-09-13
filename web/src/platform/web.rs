@@ -1,10 +1,10 @@
-//! The browser-shaped edges: the clock, randomness, and file downloads.
-//!
-//! Keeping these in one place is what lets `edc-core` stay platform-free and
-//! compile into both the wasm client and the sync server.
+//! The browser edges.
 
 use edc_core::Date;
 use wasm_bindgen::{JsCast, JsValue};
+
+/// Where this copy of the calendar lives, as the sync status names it.
+pub const HERE: &str = "This browser";
 
 /// The browser's local "today".
 pub fn today() -> Date {
@@ -23,6 +23,16 @@ pub fn random_id() -> String {
     let high = (js_sys::Math::random() * (1u64 << 24) as f64) as u64;
     let low = (js_sys::Math::random() * (1u64 << 24) as f64) as u64;
     format!("{:06x}{:06x}", high & 0xff_ffff, low & 0xff_ffff)
+}
+
+/// The browser decides the window size, so there is nothing to fit.
+pub fn use_fit_window() {}
+
+/// A browser tab has no tray to live in.
+pub fn use_tray() {}
+
+pub async fn sleep(ms: u32) {
+    gloo_timers::future::TimeoutFuture::new(ms).await;
 }
 
 pub fn prefers_reduced_motion() -> bool {
@@ -61,6 +71,35 @@ pub fn focus(id: &str) {
     {
         let _ = element.focus();
     }
+}
+
+fn storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.local_storage().ok().flatten()
+}
+
+pub fn store_get(key: &str) -> Option<String> {
+    storage()?.get_item(key).ok().flatten()
+}
+
+pub fn store_set(key: &str, value: &str) {
+    if let Some(store) = storage() {
+        let _ = store.set_item(key, value);
+    }
+}
+
+/// Everything in `localStorage`, for picking up saves from older versions.
+pub fn store_entries() -> Vec<(String, String)> {
+    let Some(store) = storage() else {
+        return Vec::new();
+    };
+    let length = store.length().unwrap_or(0);
+    (0..length)
+        .filter_map(|index| {
+            let key = store.key(index).ok()??;
+            let value = store.get_item(&key).ok()??;
+            Some((key, value))
+        })
+        .collect()
 }
 
 /// Hands the browser a file to save. Nothing leaves the machine.
