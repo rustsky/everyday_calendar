@@ -1201,6 +1201,194 @@ input[type="text"]:focus-visible {
 }
 
 /* --------------------------------------------------------------------------
+   The log: the back of the board
+   -------------------------------------------------------------------------- */
+
+/* The backplate is cream in the studio theme, so the gold that reads on the
+   PCB has to darken here to stay legible. */
+.backplate {
+  --log-lit: #a8781f;
+  --log-empty: rgba(44, 36, 25, 0.12);
+  --log-rule: rgba(44, 36, 25, 0.16);
+}
+
+.theme-midnight .backplate {
+  --log-lit: var(--led-2);
+  --log-empty: rgba(255, 255, 255, 0.09);
+  --log-rule: rgba(255, 255, 255, 0.14);
+}
+
+.log-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--log-rule);
+}
+
+.log-head h2 {
+  margin: 0;
+}
+
+.log-total {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.log-empty {
+  margin: 18px 0 0;
+  opacity: 0.7;
+}
+
+.log-years {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.log-year-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.log-year-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.log-year-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+
+/* One row per year. Lit days are absolutely placed runs, so a row costs a few
+   dozen elements rather than 366. */
+.log-track {
+  position: relative;
+  height: clamp(20px, 4.4vw, 34px);
+  border-radius: 3px;
+  background: var(--log-empty);
+  overflow: hidden;
+}
+
+.log-run {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--log-lit);
+}
+
+.log-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--log-rule);
+}
+
+.log-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+}
+
+.log-figure-label {
+  flex-basis: 100%;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.log-figure-value {
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.log-figure-unit {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.backplate-body .milestone {
+  margin-top: 20px;
+}
+
+.backplate-body .milestone-track {
+  background: var(--log-empty);
+}
+
+.log-weekdays {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--log-rule);
+}
+
+.log-weekdays h3 {
+  margin-top: 0;
+}
+
+.weekday-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.weekday-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.weekday-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--log-empty);
+  overflow: hidden;
+}
+
+.weekday-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--log-lit);
+}
+
+.weekday-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.weekday-pct {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+.log-credit {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--log-rule);
+}
+
+.log-credit p {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  opacity: 0.65;
+}
+
+/* --------------------------------------------------------------------------
    Toast, celebration, fine print
    -------------------------------------------------------------------------- */
 

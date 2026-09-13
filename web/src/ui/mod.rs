@@ -546,7 +546,6 @@ pub fn App() -> Element {
                 }
             }
 
-            console::Readout {}
             console::Console {}
             if *ctx.settings_open.read() {
                 console::Settings {}
