@@ -4,12 +4,12 @@ mod about;
 mod board;
 mod console;
 
+use dioxus::core::Task;
 use dioxus::prelude::*;
 use edc_core::model::{Doc, GoalId, Stamp};
 use edc_core::prefs::Prefs;
 use edc_core::stats::{self, Stats};
 use edc_core::{Date, YearBits, date};
-use gloo_timers::future::TimeoutFuture;
 
 use crate::audio::{self, Tone};
 use crate::sync::{self, Status};
@@ -152,7 +152,7 @@ fn end_peek(mut ctx: Ctx) {
         return;
     };
     spawn(async move {
-        TimeoutFuture::new(PEEK_LINGER_MS).await;
+        platform::sleep(PEEK_LINGER_MS).await;
         // Another press may have claimed the label in the meantime.
         if ctx.peek.peek().is_some_and(|p| p.id == current.id) {
             ctx.peek.set(None);
@@ -172,7 +172,7 @@ pub fn show_toast(mut ctx: Ctx, text: impl Into<String>, undo: Option<(GoalId, i
         undo,
     }));
     spawn(async move {
-        TimeoutFuture::new(7_000).await;
+        platform::sleep(7_000).await;
         let still_showing = ctx.toast.peek().as_ref().is_some_and(|t| t.id == id);
         if still_showing {
             ctx.toast.set(None);
@@ -191,7 +191,7 @@ fn celebrate(mut ctx: Ctx, streak: u32) {
         audio::play(Tone::Milestone);
     }
     spawn(async move {
-        TimeoutFuture::new(2_600).await;
+        platform::sleep(2_600).await;
         let still_showing = ctx.burst.peek().as_ref().is_some_and(|b| b.id == id);
         if still_showing {
             ctx.burst.set(None);
@@ -302,7 +302,7 @@ pub fn press(mut ctx: Ctx, ord: usize) {
     begin_peek(ctx, ord);
 
     spawn(async move {
-        TimeoutFuture::new(ms).await;
+        platform::sleep(ms).await;
         if *ctx.hold_gen.peek() != generation {
             return;
         }
@@ -316,7 +316,7 @@ pub fn press(mut ctx: Ctx, ord: usize) {
                 ms: HOLD_RESET_MS,
                 arming_reset: true,
             }));
-            TimeoutFuture::new(HOLD_RESET_MS).await;
+            platform::sleep(HOLD_RESET_MS).await;
             if *ctx.hold_gen.peek() != generation {
                 return;
             }
@@ -377,12 +377,12 @@ pub fn go_to_month(mut ctx: Ctx, delta: i32) {
 }
 
 /// One exchange with the server: send everything, adopt what comes back.
-async fn exchange(mut ctx: Ctx) {
+async fn exchange(mut ctx: Ctx, endpoint: &str) {
     ctx.sync.set(Status::Syncing);
     ctx.dirty.set(false);
     let snapshot = ctx.doc.peek().clone();
 
-    match sync::exchange(&snapshot).await {
+    match sync::exchange(endpoint, &snapshot).await {
         Ok(merged) => {
             let mut next = ctx.doc.peek().clone();
             next.merge(&merged);
@@ -419,7 +419,49 @@ pub fn sync_now(ctx: Ctx) {
     if ctx.sync.peek().is_local() {
         return;
     }
-    spawn(exchange(ctx));
+    let Some(endpoint) = sync::endpoint(&ctx.prefs.peek()) else {
+        return;
+    };
+    spawn(async move { exchange(ctx, &endpoint).await });
+}
+
+/// Finds the server, then keeps the document in step with it.
+async fn sync_loop(mut ctx: Ctx, endpoint: Option<String>) {
+    let Some(endpoint) = endpoint else {
+        if !ctx.sync.peek().is_local() {
+            ctx.sync.set(Status::Local);
+        }
+        ensure_a_goal(ctx);
+        return;
+    };
+
+    while !sync::available(&endpoint).await {
+        if !cfg!(feature = "desktop") {
+            // Nothing behind this origin, so the page stays local for good.
+            ensure_a_goal(ctx);
+            return;
+        }
+        // The desktop app was pointed at this server on purpose, so it keeps
+        // knocking until the server turns up or the address changes.
+        ctx.sync.set(Status::Failed {
+            message: format!("no answer from {endpoint}"),
+        });
+        ensure_a_goal(ctx);
+        platform::sleep(SYNC_POLL_MS as u32).await;
+    }
+
+    // The first exchange runs before any starter goal is minted, so a new
+    // device adopts the goals already on the server instead of adding a
+    // duplicate of its own.
+    exchange(ctx, &endpoint).await;
+    ensure_a_goal(ctx);
+    loop {
+        platform::sleep(SYNC_TICK_MS).await;
+        let stale = platform::now_ms().saturating_sub(*ctx.last_sync.peek()) > SYNC_POLL_MS;
+        if (*ctx.dirty.peek() || stale) && platform::is_visible() {
+            exchange(ctx, &endpoint).await;
+        }
+    }
 }
 
 pub fn App() -> Element {
@@ -465,32 +507,22 @@ pub fn App() -> Element {
         if *ctx.booting.peek() {
             let mut booting = ctx.booting;
             spawn(async move {
-                TimeoutFuture::new(BOOT_MS).await;
+                platform::sleep(BOOT_MS).await;
                 booting.set(false);
             });
         }
     });
 
-    // Sync, if a server answers at this origin.
-    use_hook(|| {
-        spawn(async move {
-            if !sync::available().await {
-                ensure_a_goal(ctx);
-                return;
-            }
-            // The first exchange runs before any starter goal is minted, so a
-            // new device adopts the goals already on the server instead of
-            // adding a duplicate of its own.
-            exchange(ctx).await;
-            ensure_a_goal(ctx);
-            loop {
-                TimeoutFuture::new(SYNC_TICK_MS).await;
-                let stale = platform::now_ms().saturating_sub(*ctx.last_sync.peek()) > SYNC_POLL_MS;
-                if (*ctx.dirty.peek() || stale) && platform::is_visible() {
-                    exchange(ctx).await;
-                }
-            }
-        })
+    // Sync, if a server answers. The web client's endpoint never changes, so
+    // this runs once; the desktop app starts over when its address is edited.
+    let endpoint = use_memo(move || sync::endpoint(&ctx.prefs.read()));
+    let mut sync_task = use_signal(|| None::<Task>);
+    use_effect(move || {
+        let endpoint = endpoint();
+        if let Some(previous) = sync_task.write().take() {
+            previous.cancel();
+        }
+        sync_task.set(Some(spawn(sync_loop(ctx, endpoint))));
     });
 
     let prefs = ctx.prefs.read();

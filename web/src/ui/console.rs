@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use edc_core::legacy;
 use edc_core::model::{Accent, GoalId, GoalRecord};
-use edc_core::prefs::{Theme, View};
+use edc_core::prefs::{Theme, View, normalize_server};
 
 use super::{Ctx, go_to_year, reset_year, show_toast, sync_now, use_ctx};
 use crate::{platform, storage};
@@ -240,6 +240,7 @@ pub fn Settings() -> Element {
     let prefs = ctx.prefs.read();
     let ritual = prefs.ritual;
     let boot = prefs.boot_sequence;
+    let server = prefs.server.clone().unwrap_or_default();
     drop(prefs);
 
     let year = *ctx.year.read();
@@ -300,9 +301,31 @@ pub fn Settings() -> Element {
             Switch {
                 id: "boot",
                 label: "Power-on light sequence",
-                hint: "The sweep across the board when the page loads.",
+                hint: "The sweep across the board when it first lights up.",
                 checked: boot,
                 on_toggle: move |value| ctx.prefs.write().boot_sequence = value,
+            }
+
+            // The web client syncs with whatever served it; only the desktop
+            // app needs telling where the server is.
+            if cfg!(feature = "desktop") {
+                div { class: "settings-row",
+                    label { r#for: "sync-server", "Sync server" }
+                    input {
+                        id: "sync-server",
+                        r#type: "text",
+                        inputmode: "url",
+                        spellcheck: "false",
+                        autocomplete: "off",
+                        value: "{server}",
+                        placeholder: "http://my-computer:8080",
+                        // On commit rather than every keystroke, so a half-typed
+                        // address is never probed.
+                        onchange: move |event| {
+                            ctx.prefs.write().server = normalize_server(&event.value());
+                        },
+                    }
+                }
             }
 
             div { class: "settings-row settings-actions",
