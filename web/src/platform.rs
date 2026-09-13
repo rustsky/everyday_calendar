@@ -56,10 +56,10 @@ pub fn focus(id: &str) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;
     };
-    if let Some(element) = document.get_element_by_id(id) {
-        if let Ok(element) = element.dyn_into::<web_sys::HtmlElement>() {
-            let _ = element.focus();
-        }
+    if let Some(element) = document.get_element_by_id(id)
+        && let Ok(element) = element.dyn_into::<web_sys::HtmlElement>()
+    {
+        let _ = element.focus();
     }
 }
 

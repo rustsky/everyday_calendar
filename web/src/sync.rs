@@ -16,9 +16,13 @@ pub enum Status {
     /// No sync server answered; everything stays in this browser.
     Local,
     /// A server is there and the last exchange succeeded.
-    Synced { at: u64 },
+    Synced {
+        at: u64,
+    },
     Syncing,
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
 }
 
 impl Status {

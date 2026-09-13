@@ -558,7 +558,8 @@ fn delete_active_goal(mut ctx: Ctx) {
         if doc.peek().goal_ids().len() <= 1 {
             return;
         }
-        doc.write().edit_goal(&id, stamp, |record| record.deleted = true);
+        doc.write()
+            .edit_goal(&id, stamp, |record| record.deleted = true);
         name
     };
 
