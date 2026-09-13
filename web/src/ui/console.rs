@@ -75,23 +75,17 @@ fn add_goal(mut ctx: Ctx) {
     ctx.dirty.set(true);
 }
 
-/// The controls, which live on the back of the board now that nothing sits
-/// outside the frame. Flipping is triggered from the board itself.
-pub fn Controls() -> Element {
+/// Year and view, carried on the front of the board. These two get reached for
+/// often enough that putting them behind a flip would be in the way.
+pub fn BoardNav() -> Element {
     let mut ctx = use_ctx();
-    let prefs = ctx.prefs.read();
-    let view = prefs.view;
-    let brightness = prefs.brightness;
-    let sound = prefs.sound;
-    let theme = prefs.theme;
-    drop(prefs);
-
+    let view = ctx.prefs.read().view;
     let year = *ctx.year.read();
     let today = *ctx.today.read();
     let on_today = year == today.year;
 
     rsx! {
-        section { class: "controls", aria_label: "Controls",
+        div { class: "board-nav",
             div { class: "console-group",
                 button {
                     r#type: "button",
@@ -135,7 +129,22 @@ pub fn Controls() -> Element {
                     "Month"
                 }
             }
+        }
+    }
+}
 
+/// The controls, which live on the back of the board now that nothing sits
+/// outside the frame. Flipping is triggered from the board itself.
+pub fn Controls() -> Element {
+    let mut ctx = use_ctx();
+    let prefs = ctx.prefs.read();
+    let brightness = prefs.brightness;
+    let sound = prefs.sound;
+    let theme = prefs.theme;
+    drop(prefs);
+
+    rsx! {
+        section { class: "controls", aria_label: "Controls",
             div { class: "console-group dimmer",
                 label { r#for: "brightness", "Brightness" }
                 input {

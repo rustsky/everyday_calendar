@@ -931,14 +931,6 @@ input[type="range"]:focus-visible {
   background: var(--surface-line);
 }
 
-.hint {
-  margin: 0;
-  max-width: 56ch;
-  text-align: center;
-  font-size: 13px;
-  color: var(--ink-dim);
-}
-
 /* --------------------------------------------------------------------------
    Settings
    -------------------------------------------------------------------------- */
@@ -1232,12 +1224,54 @@ input[type="text"]:focus-visible {
   border-top: 1px dashed rgba(198, 158, 74, 0.28);
 }
 
-.board-foot .hint {
-  margin: 0;
-  max-width: none;
-  text-align: left;
+/* Year and view ride on the bare PCB, so they take silkscreen colours rather
+   than the page surface they were built for. */
+.board-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.board-foot .step,
+.board-foot .button,
+.board-foot .segmented {
+  border-color: rgba(198, 158, 74, 0.34);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--silk);
-  font-size: clamp(10px, 1.8cqw, 13px);
+}
+
+.board-foot .segmented .segment {
+  border-color: transparent;
+  background: transparent;
+  color: var(--silk);
+}
+
+.board-foot .segmented .segment.is-on {
+  border-color: var(--led-2);
+  background: color-mix(in srgb, var(--led-2) 16%, transparent);
+  color: var(--led-1);
+}
+
+.board-foot .year-readout {
+  color: var(--silk);
+  font-size: clamp(15px, 2.6cqw, 20px);
+}
+
+.board-foot .step,
+.board-foot .button,
+.board-foot .segment {
+  padding: 5px 12px;
+  font-size: clamp(11px, 1.9cqw, 13px);
+}
+
+.board-foot .step {
+  width: 30px;
+  padding: 5px 0;
+}
+
+.board-foot .button:disabled {
+  opacity: 0.4;
 }
 
 .board-foot .button {

@@ -19,7 +19,6 @@ pub fn Board(props: BoardProps) -> Element {
     let today = *ctx.today.read();
     let streak = ctx.stats().current;
     let unit = if streak == 1 { "day" } else { "days" };
-    let ritual = ctx.prefs.read().ritual;
 
     let grid = match props.view {
         View::Year => rsx! { YearGrid { year, today } },
@@ -37,13 +36,7 @@ pub fn Board(props: BoardProps) -> Element {
             }
             {grid}
             div { class: "board-foot",
-                p { class: "hint",
-                    if ritual {
-                        "Hold a day until it fills. Hold January 1 for ten seconds to clear the year."
-                    } else {
-                        "Tap a day to light it, or drag across several."
-                    }
-                }
+                console::BoardNav {}
                 button {
                     r#type: "button",
                     class: "button",
