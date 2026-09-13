@@ -48,7 +48,8 @@ fn try_play(tone: Tone) -> Result<(), JsValue> {
         let env = ctx.create_gain()?;
         env.gain().set_value(0.0);
         env.gain().set_value_at_time(0.0, start)?;
-        env.gain().linear_ramp_to_value_at_time(1.0, start + 0.012)?;
+        env.gain()
+            .linear_ramp_to_value_at_time(1.0, start + 0.012)?;
         env.gain()
             .exponential_ramp_to_value_at_time(0.0001, start + 0.32)?;
 

@@ -223,7 +223,7 @@ impl Doc {
             .filter(|(_, days)| days.values().any(|op| op.lit))
             .map(|(year, _)| *year);
         let first = lit_years.next()?;
-        let last = lit_years.last().unwrap_or(first);
+        let last = lit_years.next_back().unwrap_or(first);
         Some((first, last))
     }
 

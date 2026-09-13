@@ -67,7 +67,12 @@ pub fn export_json(doc: &Doc) -> String {
 
 /// Folds a backup into a document. Every day in the backup is written with
 /// `stamp`, so an import beats anything older and loses to anything newer.
-pub fn import_into(doc: &mut Doc, backup: &Backup, stamp: Stamp, mut next_id: impl FnMut() -> String) {
+pub fn import_into(
+    doc: &mut Doc,
+    backup: &Backup,
+    stamp: Stamp,
+    mut next_id: impl FnMut() -> String,
+) {
     for (index, goal) in backup.goals.iter().enumerate() {
         // Match on name so re-importing a backup updates the goal it came from
         // instead of duplicating it.
@@ -153,7 +158,13 @@ mod tests {
                 stamp: Stamp::new(1, "a"),
             },
         );
-        doc.set_day("g1", 2026, date::ordinal(2026, 2, 4), true, Stamp::new(1, "a"));
+        doc.set_day(
+            "g1",
+            2026,
+            date::ordinal(2026, 2, 4),
+            true,
+            Stamp::new(1, "a"),
+        );
         doc.set_day("g1", 2025, 0, true, Stamp::new(1, "a"));
 
         let json = export_json(&doc);

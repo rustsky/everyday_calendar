@@ -175,7 +175,7 @@ pub fn toggle_day(ctx: Ctx, ord: usize) {
     let lit = !ctx.is_lit(ord);
     let stamp = ctx.stamp();
     {
-        let mut doc = ctx.doc.clone();
+        let mut doc = ctx.doc;
         doc.write().set_day(&goal, year, ord, lit, stamp);
     }
     touch(ctx);
@@ -197,10 +197,8 @@ pub fn toggle_day(ctx: Ctx, ord: usize) {
     if ctx.prefs.peek().sound {
         audio::play(if lit { Tone::Light } else { Tone::Dim });
     }
-    if lit {
-        if let Some(milestone) = stats::milestone_for(after.current) {
-            celebrate(ctx, milestone);
-        }
+    if lit && let Some(milestone) = stats::milestone_for(after.current) {
+        celebrate(ctx, milestone);
     }
 }
 
@@ -225,23 +223,19 @@ fn reset_year_to(ctx: Ctx, restore: YearBits) {
 
     let stamp = ctx.stamp();
     {
-        let mut doc = ctx.doc.clone();
+        let mut doc = ctx.doc;
         doc.write().clear_year(&goal, year, stamp);
     }
     touch(ctx);
 
     announce(ctx, format!("{year} cleared."));
-    show_toast(
-        ctx,
-        format!("{year} cleared."),
-        Some((goal, year, restore)),
-    );
+    show_toast(ctx, format!("{year} cleared."), Some((goal, year, restore)));
 }
 
 pub fn undo_reset(mut ctx: Ctx, goal: GoalId, year: i32, bits: YearBits) {
     let stamp = ctx.stamp();
     {
-        let mut doc = ctx.doc.clone();
+        let mut doc = ctx.doc;
         doc.write().restore_year(&goal, year, bits, stamp);
     }
     touch(ctx);
@@ -457,8 +451,7 @@ pub fn App() -> Element {
             ensure_a_goal(ctx);
             loop {
                 TimeoutFuture::new(SYNC_TICK_MS).await;
-                let stale =
-                    platform::now_ms().saturating_sub(*ctx.last_sync.peek()) > SYNC_POLL_MS;
+                let stale = platform::now_ms().saturating_sub(*ctx.last_sync.peek()) > SYNC_POLL_MS;
                 if (*ctx.dirty.peek() || stale) && platform::is_visible() {
                     exchange(ctx).await;
                 }
