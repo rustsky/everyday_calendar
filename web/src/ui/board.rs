@@ -57,6 +57,7 @@ fn YearGrid(props: GridProps) -> Element {
     let today = props.today;
     let bits = ctx.doc.read().year_bits(&ctx.goal_id(), year);
     let hold = *ctx.hold.read();
+    let peek = *ctx.peek.read();
     let last_ordinal = date::days_in_year(year) as usize - 1;
     let focus = (*ctx.focus.read()).min(last_ordinal);
 
@@ -96,6 +97,8 @@ fn YearGrid(props: GridProps) -> Element {
                                         focused: focus == ord,
                                         hold_ms: hold.filter(|h| h.ord == ord).map(|h| h.ms),
                                         arming: hold.is_some_and(|h| h.ord == ord && h.arming_reset),
+                                        peeking: peek.is_some_and(|p| p.ord == ord),
+                                        weekday_short: date.weekday_short(),
                                         trace: day < length,
                                         label: date.long_label(),
                                         view: View::Year,
@@ -117,6 +120,7 @@ fn MonthGrid(props: GridProps) -> Element {
     let month = *ctx.month.read();
     let bits = ctx.doc.read().year_bits(&ctx.goal_id(), year);
     let hold = *ctx.hold.read();
+    let peek = *ctx.peek.read();
 
     let month_name = date::MONTHS_LONG[month as usize];
     let lead = date::weekday(year, month, 1) as usize;
@@ -186,6 +190,8 @@ fn MonthGrid(props: GridProps) -> Element {
                                         focused: focus == ord,
                                         hold_ms: hold.filter(|h| h.ord == ord).map(|h| h.ms),
                                         arming: hold.is_some_and(|h| h.ord == ord && h.arming_reset),
+                                        peeking: peek.is_some_and(|p| p.ord == ord),
+                                        weekday_short: date.weekday_short(),
                                         trace: false,
                                         label: date.long_label(),
                                         view: View::Month,
@@ -222,6 +228,9 @@ struct PadProps {
     hold_ms: Option<u32>,
     /// The press has crossed into "keep holding to clear the year".
     arming: bool,
+    /// Show this day's weekday instead of its number, while the pad is held.
+    peeking: bool,
+    weekday_short: &'static str,
     /// Draw the trace running down to the next day in the month.
     trace: bool,
     label: String,
@@ -236,6 +245,13 @@ fn Pad(props: PadProps) -> Element {
     let held = props.hold_ms.is_some();
     let hold_ms = props.hold_ms.unwrap_or(super::HOLD_LIGHT_MS);
     let lit_word = if props.lit { "Lit" } else { "Not lit" };
+    // Holding a pad names its day. Two characters, exactly as wide as the
+    // two-digit numbers the pad already prints.
+    let glyph = if props.peeking {
+        props.weekday_short.to_string()
+    } else {
+        props.day.to_string()
+    };
 
     rsx! {
         button {
@@ -290,7 +306,7 @@ fn Pad(props: PadProps) -> Element {
             span { class: "cap",
                 span { class: "lamp", aria_hidden: "true" }
                 span { class: "fill", aria_hidden: "true" }
-                span { class: "num", "{props.day}" }
+                span { class: "num", "{glyph}" }
             }
             if props.arming {
                 span { class: "arm-label", "Keep holding to clear the year" }

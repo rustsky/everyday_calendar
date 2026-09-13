@@ -21,6 +21,9 @@ pub const HOLD_LIGHT_MS: u32 = 550;
 pub const HOLD_DIM_MS: u32 = 900;
 /// The hardware clears itself when January 1 is held for ten seconds.
 pub const HOLD_RESET_MS: u32 = 10_000;
+/// How long the weekday label stays up after the press ends, so a quick press
+/// reads as a reveal rather than a flash.
+pub const PEEK_LINGER_MS: u32 = 150;
 /// Length of the power-on light sweep.
 const BOOT_MS: u32 = 1_700;
 /// How often the sync loop wakes up to look for work.
@@ -28,6 +31,13 @@ const SYNC_TICK_MS: u32 = 1_000;
 /// How long to go without talking to the server before checking in anyway, so
 /// changes made on another device turn up on their own.
 const SYNC_POLL_MS: u64 = 20_000;
+
+/// The pad currently naming its weekday. Outlives the hold by [`PEEK_LINGER_MS`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Peek {
+    pub ord: usize,
+    id: u64,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hold {
@@ -64,6 +74,8 @@ pub struct Ctx {
     pub settings_open: Signal<bool>,
     pub hold: Signal<Option<Hold>>,
     pub hold_gen: Signal<u64>,
+    /// Which pad is showing its weekday, if any.
+    pub peek: Signal<Option<Peek>>,
     pub toast: Signal<Option<Toast>>,
     pub burst: Signal<Option<Burst>>,
     pub announce: Signal<String>,
@@ -127,6 +139,26 @@ pub fn use_ctx() -> Ctx {
 /// Records that there is something for the sync loop to send.
 fn touch(mut ctx: Ctx) {
     ctx.dirty.set(true);
+}
+
+/// Starts naming the held day.
+fn begin_peek(mut ctx: Ctx, ord: usize) {
+    let id = ctx.next_id();
+    ctx.peek.set(Some(Peek { ord, id }));
+}
+
+/// Stops naming it, after a short linger so the label does not flash.
+fn end_peek(mut ctx: Ctx) {
+    let Some(current) = *ctx.peek.peek() else {
+        return;
+    };
+    spawn(async move {
+        TimeoutFuture::new(PEEK_LINGER_MS).await;
+        // Another press may have claimed the label in the meantime.
+        if ctx.peek.peek().is_some_and(|p| p.id == current.id) {
+            ctx.peek.set(None);
+        }
+    });
 }
 
 pub fn announce(mut ctx: Ctx, text: impl Into<String>) {
@@ -268,6 +300,7 @@ pub fn press(mut ctx: Ctx, ord: usize) {
         ms,
         arming_reset: false,
     }));
+    begin_peek(ctx, ord);
 
     spawn(async move {
         TimeoutFuture::new(ms).await;
@@ -291,6 +324,7 @@ pub fn press(mut ctx: Ctx, ord: usize) {
             reset_year_to(ctx, before_gesture);
         }
         ctx.hold.set(None);
+        end_peek(ctx);
     });
 }
 
@@ -301,6 +335,7 @@ pub fn release(mut ctx: Ctx) {
     if ctx.hold.peek().is_some() {
         ctx.hold.set(None);
     }
+    end_peek(ctx);
 }
 
 /// Drag-to-paint, available only when the ritual is switched off — this is how
@@ -409,6 +444,7 @@ pub fn App() -> Element {
             settings_open: Signal::new(false),
             hold: Signal::new(None),
             hold_gen: Signal::new(0),
+            peek: Signal::new(None),
             toast: Signal::new(None),
             burst: Signal::new(None),
             announce: Signal::new(String::new()),
