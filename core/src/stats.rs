@@ -45,6 +45,64 @@ impl Stats {
     }
 }
 
+/// How often one weekday gets kept.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct WeekdayRate {
+    pub done: u32,
+    /// Days of this weekday that have actually happened.
+    pub total: u32,
+}
+
+impl WeekdayRate {
+    pub fn percent(&self) -> u32 {
+        if self.total == 0 {
+            0
+        } else {
+            (self.done * 100).div_ceil(self.total).min(100)
+        }
+    }
+}
+
+/// Completion per weekday across one year, indexed from Sunday. Days still in
+/// the future are left out, so a year in progress is not scored against days
+/// that have not happened.
+pub fn weekday_rates(doc: &Doc, goal: &str, year: i32, today: Date) -> [WeekdayRate; 7] {
+    let mut rates = [WeekdayRate::default(); 7];
+    if today.year < year {
+        return rates;
+    }
+    let last = if today.year == year {
+        today.ordinal
+    } else {
+        date::days_in_year(year) as usize - 1
+    };
+    for ordinal in 0..=last {
+        let (month, day) = date::from_ordinal(year, ordinal);
+        let slot = &mut rates[date::weekday(year, month, day) as usize];
+        slot.total += 1;
+        if doc.is_lit(goal, Date { year, ordinal }) {
+            slot.done += 1;
+        }
+    }
+    rates
+}
+
+/// Lit days collapsed into `(first ordinal, length)` runs. A year of ticks is
+/// a few dozen runs, so the log draws spans rather than 366 elements a row.
+pub fn lit_runs(bits: &crate::bits::YearBits, days: u32) -> Vec<(u32, u32)> {
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for day in 0..days {
+        if !bits.get(day as usize) {
+            continue;
+        }
+        match runs.last_mut() {
+            Some((start, len)) if *start + *len == day => *len += 1,
+            _ => runs.push((day, 1)),
+        }
+    }
+    runs
+}
+
 /// Returns the milestone this streak length just hit, if any.
 pub fn milestone_for(streak: u32) -> Option<u32> {
     MILESTONES.contains(&streak).then_some(streak)
@@ -204,5 +262,42 @@ mod tests {
         let stats = compute(&doc, "g1", Date::new(2026, 2, 3), 2026, 2);
         assert_eq!(stats.current, 1);
         assert_eq!(stats.total, 2);
+    }
+
+    #[test]
+    fn the_log_lists_only_years_holding_a_lit_day() {
+        let mut doc = doc_with(&[(2024, 0, 1), (2026, 5, 4)]);
+        // A year that was written to and then cleared is not part of the log.
+        doc.set_day("g1", 2025, 0, true, Stamp::new(1, "test"));
+        doc.set_day("g1", 2025, 0, false, Stamp::new(2, "test"));
+        assert_eq!(doc.years("g1"), vec![2024, 2026]);
+        assert!(doc.years("nobody").is_empty());
+    }
+
+    #[test]
+    fn runs_collapse_neighbouring_days() {
+        let doc = doc_with(&[(2026, 0, 1), (2026, 0, 2), (2026, 0, 3), (2026, 0, 9)]);
+        let bits = doc.year_bits("g1", 2026);
+        // Three consecutive days plus a lone one, not four separate ticks.
+        assert_eq!(lit_runs(&bits, 365), vec![(0, 3), (8, 1)]);
+        assert_eq!(lit_runs(&crate::bits::YearBits::default(), 365), vec![]);
+    }
+
+    #[test]
+    fn weekdays_only_count_days_that_have_happened() {
+        // 1 January 2026 is a Thursday, so the 1st and the 8th are Thursdays.
+        let doc = doc_with(&[(2026, 0, 1)]);
+        let rates = weekday_rates(&doc, "g1", 2026, Date::new(2026, 0, 8));
+        let thursday = rates[4];
+        assert_eq!((thursday.done, thursday.total), (1, 2));
+        assert_eq!(thursday.percent(), 50);
+
+        // Sunday the 4th has happened and was missed; Saturday has not.
+        assert_eq!((rates[0].done, rates[0].total), (0, 1));
+        assert_eq!(rates[6].total, 1);
+
+        // A year that has not started scores nothing rather than zero percent.
+        let future = weekday_rates(&doc, "g1", 2027, Date::new(2026, 0, 8));
+        assert!(future.iter().all(|rate| rate.total == 0));
     }
 }

@@ -1,10 +1,9 @@
-//! Everything around the board: goals, the readout, the dimmer, and settings.
+//! Everything around the board: goals, the dimmer, and settings.
 
 use dioxus::prelude::*;
 use edc_core::legacy;
 use edc_core::model::{Accent, GoalId, GoalRecord};
 use edc_core::prefs::{Theme, View};
-use edc_core::stats::Stats;
 
 use super::{Ctx, go_to_year, reset_year, show_toast, sync_now, use_ctx};
 use crate::{platform, storage};
@@ -74,102 +73,6 @@ fn add_goal(mut ctx: Ctx) {
     }
     ctx.prefs.write().active = Some(id);
     ctx.dirty.set(true);
-}
-
-pub fn Readout() -> Element {
-    let ctx = use_ctx();
-    let stats = ctx.stats();
-    let year = *ctx.year.read();
-    let target = stats.next_milestone();
-    let progress = target
-        .map(|t| (stats.current as f32 / t as f32 * 100.0).clamp(0.0, 100.0))
-        .unwrap_or(100.0);
-
-    let current_unit = if stats.current == 1 { "day" } else { "days" };
-    let year_unit = format!("of {} · {}%", stats.year_days, stats.year_percent());
-
-    rsx! {
-        section { class: "readout", aria_label: "Progress",
-            Tile {
-                label: "Current streak",
-                value: "{stats.current}",
-                unit: "{current_unit}",
-                emphasis: true,
-            }
-            Tile { label: "Longest streak", value: "{stats.longest}", unit: "days" }
-            Tile { label: "{year}", value: "{stats.year_lit}", unit: "{year_unit}" }
-            Tile { label: "Last 365 days", value: "{stats.last_year}", unit: "days" }
-            Tile { label: "All time", value: "{stats.total}", unit: "days" }
-        }
-        MilestoneBar { stats, target, progress }
-    }
-}
-
-#[derive(Props, Clone, PartialEq)]
-struct TileProps {
-    label: String,
-    value: String,
-    unit: String,
-    #[props(default = false)]
-    emphasis: bool,
-}
-
-fn Tile(props: TileProps) -> Element {
-    rsx! {
-        div {
-            class: "tile",
-            class: if props.emphasis { "is-primary" },
-            span { class: "tile-value", "{props.value}" }
-            span { class: "tile-unit", "{props.unit}" }
-            span { class: "tile-label", "{props.label}" }
-        }
-    }
-}
-
-#[derive(Props, Clone, PartialEq)]
-struct MilestoneProps {
-    stats: Stats,
-    target: Option<u32>,
-    progress: f32,
-}
-
-fn MilestoneBar(props: MilestoneProps) -> Element {
-    let stats = props.stats;
-    let caption = match props.target {
-        Some(target) if stats.current == 0 => {
-            format!("Light today to start a streak. First milestone: {target} days.")
-        }
-        Some(target) => {
-            let left = target - stats.current;
-            format!(
-                "{left} more {} to {target}.",
-                if left == 1 { "day" } else { "days" }
-            )
-        }
-        None => "Past every milestone. Keep going.".to_string(),
-    };
-
-    rsx! {
-        div { class: "milestone",
-            div {
-                class: "milestone-track",
-                role: "progressbar",
-                aria_valuemin: 0,
-                aria_valuemax: 100,
-                aria_valuenow: props.progress as i64,
-                aria_label: "Progress to next milestone",
-                span { class: "milestone-fill", style: "width: {props.progress}%;" }
-            }
-            p {
-                class: "milestone-caption",
-                class: if stats.at_risk { "is-warning" },
-                if stats.at_risk {
-                    "Today is still dark. "
-                }
-                "{caption}"
-            }
-        }
-    }
 }
 
 pub fn Console() -> Element {
