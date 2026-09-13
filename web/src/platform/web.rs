@@ -25,6 +25,9 @@ pub fn random_id() -> String {
     format!("{:06x}{:06x}", high & 0xff_ffff, low & 0xff_ffff)
 }
 
+/// The browser decides the window size, so there is nothing to fit.
+pub fn use_fit_window() {}
+
 pub async fn sleep(ms: u32) {
     gloo_timers::future::TimeoutFuture::new(ms).await;
 }

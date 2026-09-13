@@ -495,6 +495,7 @@ pub fn App() -> Element {
         }
     });
     use_context_provider(|| ctx);
+    platform::use_fit_window();
 
     // The browser's copy is written on every change. It is the source of truth
     // for rendering, with or without a server.
@@ -546,6 +547,7 @@ pub fn App() -> Element {
     rsx! {
         div {
             class: "page theme-{theme} accent-{accent}",
+            class: if cfg!(feature = "desktop") { "desktop" },
             class: if booting { "booting" },
             class: if ritual { "ritual" },
             style: "--brightness: {brightness};",

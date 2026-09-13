@@ -32,10 +32,13 @@ fn main() {
     use dioxus::desktop::tao::window::Icon;
     use dioxus::desktop::{Config, LogicalSize, WindowBuilder, icon_from_memory};
 
+    // Opens at the board's width. Once the page has rendered it sizes the
+    // window to the board (`platform::use_fit_window`), which is also why the
+    // window isn't resizable: a dragged edge would only be snapped back.
     let window = WindowBuilder::new()
         .with_title("The Every Day Calendar")
-        .with_inner_size(LogicalSize::new(1280.0, 860.0))
-        .with_min_inner_size(LogicalSize::new(420.0, 560.0));
+        .with_inner_size(LogicalSize::new(700.0, 860.0))
+        .with_resizable(false);
 
     let mut config = Config::new()
         .with_window(window)
