@@ -23,7 +23,7 @@ pub const MONTHS_LONG: [&str; 12] = [
     "December",
 ];
 
-pub const WEEKDAYS_SHORT: [&str; 7] = ["S", "M", "T", "W", "T", "F", "S"];
+pub const WEEKDAYS_SHORT: [&str; 7] = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 pub const WEEKDAYS_LONG: [&str; 7] = [
     "Sunday",
     "Monday",
@@ -135,6 +135,12 @@ impl Date {
         }
     }
 
+    /// e.g. `"Tu"`. Replaces the day number on a pad while it is being held.
+    pub fn weekday_short(&self) -> &'static str {
+        let (m, d) = self.month_day();
+        WEEKDAYS_SHORT[weekday(self.year, m, d) as usize]
+    }
+
     /// e.g. `"Tuesday, 3 March 2026"`.
     pub fn long_label(&self) -> String {
         let (m, d) = self.month_day();
@@ -179,5 +185,32 @@ mod tests {
         assert_eq!(weekday(2026, 0, 1), 4);
         assert_eq!(weekday(2026, 1, 1), 0);
         assert_eq!(weekday(2024, 1, 29), 4);
+    }
+
+    #[test]
+    fn weekday_names_the_held_day() {
+        let thursday = Date {
+            year: 2026,
+            ordinal: ordinal(2026, 5, 18),
+        };
+        assert_eq!(thursday.weekday_short(), "Th");
+        assert!(thursday.long_label().starts_with("Thursday"));
+    }
+
+    #[test]
+    fn the_short_weekday_fits_where_a_day_number_fits() {
+        // The pad already renders two glyphs for days 10 to 31, so the
+        // abbreviation needs no more room than the number it replaces.
+        for name in WEEKDAYS_SHORT {
+            assert_eq!(name.chars().count(), 2);
+        }
+    }
+
+    #[test]
+    fn short_weekdays_are_unambiguous() {
+        let mut seen = WEEKDAYS_SHORT.to_vec();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 7, "each column must name exactly one day");
     }
 }
