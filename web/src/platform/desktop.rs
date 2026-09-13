@@ -132,6 +132,61 @@ pub fn use_fit_window() {
     });
 }
 
+/// Puts the app in the menu bar on macOS, the notification area on Windows, and
+/// the system tray on Linux. Closing the window only hides it: the tray brings
+/// it back, and the tray's Quit is how the app ends.
+pub fn use_tray() {
+    use dioxus::desktop::tao::event::Event;
+    use dioxus::desktop::trayicon::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use dioxus::desktop::trayicon::{DioxusTrayIcon, init_tray_icon};
+    use dioxus::desktop::{
+        icon_from_memory, use_tray_menu_event_handler, use_wry_event_handler, window,
+    };
+
+    let desktop = use_hook(window);
+
+    use_hook(|| {
+        // Linux trays open this menu on any click and never report the click
+        // itself, so showing the window has to be a menu item as well.
+        let menu = Menu::new();
+        let _ = menu.append_items(&[
+            &MenuItem::with_id("show", "Show calendar", true, None),
+            &PredefinedMenuItem::separator(),
+            &MenuItem::with_id("quit", "Quit", true, None),
+        ]);
+        let icon =
+            icon_from_memory::<DioxusTrayIcon>(include_bytes!("../../icons/128x128.png")).ok();
+        init_tray_icon(menu, icon);
+    });
+
+    let from_menu = desktop.clone();
+    use_tray_menu_event_handler(move |event| {
+        if event.id == "show" {
+            reveal(&from_menu);
+        } else if event.id == "quit" {
+            // Every change is already on disk, so nothing is lost here.
+            std::process::exit(0);
+        }
+    });
+
+    // A left click on the tray icon already shows the window on macOS and
+    // Windows. This covers clicking the Dock icon while the window is hidden.
+    use_wry_event_handler(move |event, _| {
+        if let Event::Reopen {
+            has_visible_windows: false,
+            ..
+        } = event
+        {
+            reveal(&desktop);
+        }
+    });
+}
+
+fn reveal(desktop: &dioxus::desktop::DesktopContext) {
+    desktop.window.set_visible(true);
+    desktop.window.set_focus();
+}
+
 /// The directory holding this computer's calendar and settings.
 pub fn data_dir() -> Option<PathBuf> {
     Some(dirs::data_dir()?.join("everydaycalendar"))

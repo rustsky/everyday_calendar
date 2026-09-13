@@ -30,7 +30,9 @@ const DESKTOP_HEAD: &str = r#"<meta name="color-scheme" content="light dark" />
 #[cfg(feature = "desktop")]
 fn main() {
     use dioxus::desktop::tao::window::Icon;
-    use dioxus::desktop::{Config, LogicalSize, WindowBuilder, icon_from_memory};
+    use dioxus::desktop::{
+        Config, LogicalSize, WindowBuilder, WindowCloseBehaviour, icon_from_memory,
+    };
 
     // Opens at the board's width. Once the page has rendered it sizes the
     // window to the board (`platform::use_fit_window`), which is also why the
@@ -42,6 +44,9 @@ fn main() {
 
     let mut config = Config::new()
         .with_window(window)
+        // Closing the window only hides it. The app stays in the tray
+        // (`platform::use_tray`), and quitting is done from there.
+        .with_close_behaviour(WindowCloseBehaviour::WindowHides)
         .with_custom_head(DESKTOP_HEAD.to_string());
     if let Ok(icon) = icon_from_memory::<Icon>(include_bytes!("../icons/icon.png")) {
         config = config.with_icon(icon);

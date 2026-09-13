@@ -28,6 +28,9 @@ pub fn random_id() -> String {
 /// The browser decides the window size, so there is nothing to fit.
 pub fn use_fit_window() {}
 
+/// A browser tab has no tray to live in.
+pub fn use_tray() {}
+
 pub async fn sleep(ms: u32) {
     gloo_timers::future::TimeoutFuture::new(ms).await;
 }

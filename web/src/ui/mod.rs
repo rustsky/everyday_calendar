@@ -496,6 +496,7 @@ pub fn App() -> Element {
     });
     use_context_provider(|| ctx);
     platform::use_fit_window();
+    platform::use_tray();
 
     // The browser's copy is written on every change. It is the source of truth
     // for rendering, with or without a server.
