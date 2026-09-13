@@ -28,10 +28,10 @@ pub fn device_id() -> String {
     let Some(store) = storage() else {
         return platform::random_id();
     };
-    if let Ok(Some(existing)) = store.get_item(DEVICE_KEY) {
-        if !existing.is_empty() {
-            return existing;
-        }
+    if let Ok(Some(existing)) = store.get_item(DEVICE_KEY)
+        && !existing.is_empty()
+    {
+        return existing;
     }
     let fresh = platform::random_id();
     let _ = store.set_item(DEVICE_KEY, &fresh);
@@ -47,10 +47,10 @@ pub fn load_doc(device: &str) -> Doc {
         return Doc::new();
     };
 
-    if let Ok(Some(raw)) = store.get_item(DOC_KEY) {
-        if let Ok(doc) = serde_json::from_str::<Doc>(&raw) {
-            return doc;
-        }
+    if let Ok(Some(raw)) = store.get_item(DOC_KEY)
+        && let Ok(doc) = serde_json::from_str::<Doc>(&raw)
+    {
+        return doc;
     }
 
     // Nothing in the current format: pick up whatever an older version of this
@@ -93,7 +93,9 @@ fn original_app(store: &web_sys::Storage) -> Option<Backup> {
         let Ok(Some(key)) = store.key(index) else {
             continue;
         };
-        let Ok(year) = key.parse::<i32>() else { continue };
+        let Ok(year) = key.parse::<i32>() else {
+            continue;
+        };
         if !(1970..=2200).contains(&year) {
             continue;
         }

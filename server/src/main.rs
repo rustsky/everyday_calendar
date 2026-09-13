@@ -112,10 +112,10 @@ async fn load(path: &Path) -> Result<Doc, Box<dyn std::error::Error>> {
 /// Writes to a sibling temp file and renames, so an interrupted write can
 /// never leave a half-written document behind.
 async fn save(path: &Path, doc: &Doc) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        tokio::fs::create_dir_all(parent).await?;
     }
     let json = serde_json::to_string(doc).unwrap_or_default();
     let temp = path.with_extension("json.tmp");
