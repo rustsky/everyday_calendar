@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
-use super::{Ctx, go_to_month, paint, press, release, use_ctx};
+use super::{Ctx, console, go_to_month, paint, press, release, use_ctx};
 use crate::platform;
 use edc_core::prefs::View;
 use edc_core::{Date, date};
@@ -14,17 +14,12 @@ pub struct BoardProps {
 }
 
 pub fn Board(props: BoardProps) -> Element {
-    let ctx = use_ctx();
+    let mut ctx = use_ctx();
     let year = *ctx.year.read();
     let today = *ctx.today.read();
-    let goal_name = ctx
-        .doc
-        .read()
-        .goal(&ctx.goal_id())
-        .map(|record| record.name.clone())
-        .unwrap_or_default();
     let streak = ctx.stats().current;
     let unit = if streak == 1 { "day" } else { "days" };
+    let ritual = ctx.prefs.read().ritual;
 
     let grid = match props.view {
         View::Year => rsx! { YearGrid { year, today } },
@@ -34,13 +29,28 @@ pub fn Board(props: BoardProps) -> Element {
     rsx! {
         div { class: "board",
             div { class: "silkscreen",
-                span { class: "silk-goal", title: "{goal_name}", "{goal_name}" }
+                console::GoalBar {}
                 span { class: "silk-streak",
                     span { class: "silk-streak-value", "{streak}" }
                     span { class: "silk-streak-unit", "{unit}" }
                 }
             }
             {grid}
+            div { class: "board-foot",
+                p { class: "hint",
+                    if ritual {
+                        "Hold a day until it fills. Hold January 1 for ten seconds to clear the year."
+                    } else {
+                        "Tap a day to light it, or drag across several."
+                    }
+                }
+                button {
+                    r#type: "button",
+                    class: "button",
+                    onclick: move |_| ctx.flipped.set(true),
+                    "Flip it over"
+                }
+            }
         }
     }
 }

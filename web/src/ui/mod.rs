@@ -71,7 +71,6 @@ pub struct Ctx {
     pub focus: Signal<usize>,
     pub flipped: Signal<bool>,
     pub booting: Signal<bool>,
-    pub settings_open: Signal<bool>,
     pub hold: Signal<Option<Hold>>,
     pub hold_gen: Signal<u64>,
     /// Which pad is showing its weekday, if any.
@@ -441,7 +440,6 @@ pub fn App() -> Element {
             today: Signal::new(today),
             flipped: Signal::new(false),
             booting: Signal::new(boot),
-            settings_open: Signal::new(false),
             hold: Signal::new(None),
             hold_gen: Signal::new(0),
             peek: Signal::new(None),
@@ -520,9 +518,6 @@ pub fn App() -> Element {
             class: if ritual { "ritual" },
             style: "--brightness: {brightness};",
 
-            Masthead {}
-            console::GoalBar {}
-
             main { class: "stage",
                 div {
                     class: "device",
@@ -546,11 +541,6 @@ pub fn App() -> Element {
                 }
             }
 
-            console::Console {}
-            if *ctx.settings_open.read() {
-                console::Settings {}
-            }
-            Fineprint {}
             ToastBar {}
             Celebration {}
 
@@ -560,16 +550,6 @@ pub fn App() -> Element {
                 aria_live: "polite",
                 "{ctx.announce}"
             }
-        }
-    }
-}
-
-#[component]
-fn Masthead() -> Element {
-    rsx! {
-        header { class: "masthead",
-            h1 { "The Every Day Calendar" }
-            p { "One goal. One day at a time. Don't break the chain." }
         }
     }
 }
@@ -636,33 +616,3 @@ fn Celebration() -> Element {
     }
 }
 
-#[component]
-fn Fineprint() -> Element {
-    let ctx = use_ctx();
-    let local = ctx.sync.read().is_local();
-
-    rsx! {
-        footer { class: "fineprint",
-            if local {
-                p {
-                    "Everything you tap is stored in this browser and nowhere else. "
-                    "0% internet-connected, same as the real thing."
-                }
-            } else {
-                p {
-                    "Your days live on your own sync server and nowhere else. "
-                    "No account, no third party."
-                }
-            }
-            p {
-                "After "
-                a { href: "https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar",
-                    "Simone Giertz's Every Day Calendar"
-                }
-                ", after the original web edition by "
-                a { href: "https://github.com/zmxv/everydaycalendar", "Zhen Wang" }
-                ". Not affiliated with Simone Giertz or Yetch."
-            }
-        }
-    }
-}

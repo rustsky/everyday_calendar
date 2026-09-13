@@ -6,7 +6,7 @@ use edc_core::date;
 use edc_core::prefs::View;
 use edc_core::stats::{self, Stats};
 
-use super::use_ctx;
+use super::{console, use_ctx};
 
 #[derive(Props, Clone, PartialEq)]
 pub struct AboutProps {
@@ -44,6 +44,8 @@ pub fn About(props: AboutProps) -> Element {
                 span { class: "hanger" }
                 span { class: "hanger" }
             }
+
+            console::Controls {}
 
             div {
                 class: "backplate-body log",
@@ -97,6 +99,17 @@ pub fn About(props: AboutProps) -> Element {
                     }
                 }
 
+                console::Settings {}
+
+                p { class: "log-credit",
+                    "After "
+                    a { href: "https://www.kickstarter.com/projects/simonegiertz/the-every-day-calendar",
+                        "Simone Giertz's Every Day Calendar"
+                    }
+                    ", after the original web edition by "
+                    a { href: "https://github.com/zmxv/everydaycalendar", "Zhen Wang" }
+                    ". Not affiliated with Simone Giertz or Yetch."
+                }
             }
         }
     }
