@@ -5,10 +5,10 @@ in Rust with [Dioxus][dioxus].
 
 Set one goal. Light one day at a time. Don't break the chain.
 
-![The 2026 board: twelve columns of gold hexagons on a dark circuit board in a
-bamboo frame, most of the year lit, a 24-day streak running up to today, with
-streak totals and a brightness dimmer
-below.](docs/screenshot-year.png)
+![The year board: twelve columns of hexagons on a dark circuit board in a
+bamboo frame. Goal chips and the current streak sit on the silkscreen header,
+with the year, Today and the year-versus-month toggle along the bottom
+edge.](docs/screenshot-year.png)
 
 This is a rewrite of [zmxv/everydaycalendar][original], the original HTML5
 edition. It puts back the parts of the hardware, and of the Kickstarter
@@ -22,12 +22,14 @@ makes the object work.
 
 | | Original web app | This |
 | --- | --- | --- |
-| **The goal** | Never asked | Named, editable, printed on the board's silkscreen |
+| **The goal** | Never asked | Named and editable, as chips on the board's silkscreen header |
 | **Press and hold** | Instant click toggle | A day only changes after a deliberate hold, and clearing one takes longer than lighting it |
+| **The weekday** | Not there | Holding a pad swaps its number for the weekday, and letting go early changes nothing |
 | **Reset** | Click 365 pads | Hold January 1 for ten seconds, exactly like the hardware, with Undo |
-| **Brightness** | Not there | A dimmer, like the knob on the back of the real board |
+| **Brightness** | Not there | A dimmer on the back of the board, where the hardware keeps its knob |
 | **Power-on sequence** | Not there | The light sweep the hardware runs at boot |
 | **Streaks** | Not there | Current streak, longest streak, trailing year, all-time, and a milestone bar |
+| **The record** | Not there | Flip the board: every year as a row of ticks, and how often you keep each weekday |
 | **Today** | Indistinguishable | Ringed and pulsing, and the streak warns you while today is still dark |
 | **More than one habit** | Explicitly punted to another app | Up to eight goals, each with its own glow |
 | **Phones** | Explicitly punted to another app | Responsive, plus a large-pad month view |
@@ -40,13 +42,18 @@ dark theme:
 
 <img src="docs/screenshot-month.png" width="390"
      alt="The same calendar on a phone-width screen in the dark theme, showing
-     September 2026 as a week grid of large hexagons with the first six days
-     lit.">
+     one month as a week grid of large hexagons.">
+
+Flip it over and the back is the record, plus everything you set once:
+
+![The back of the board: a cream panel listing every year tracked as a row of
+ticks, the current and longest streaks, a milestone bar, completion per
+weekday, and the settings panel.](docs/screenshot-back.png)
 
 Two things from the original are kept on purpose:
 
-- Quick-tap mode. Settings → *Press and hold to change a day* → off restores
-  the original instant-toggle behaviour, drag-to-paint included.
+- Quick-tap mode. Flip the board → *Press and hold to change a day* → off
+  restores the original instant-toggle behaviour, drag-to-paint included.
 - The save format. Each year is still packed into the same 61-character,
   six-bits-per-character string. Saves from `everydaycalendar.app` in this
   browser are picked up automatically the first time you load this app.
@@ -117,7 +124,7 @@ core/                a platform-free crate, compiled into both the client and th
   date.rs            proleptic-Gregorian date maths, no date crate
   bits.rs            the 366-bit year and the original app's 61-character encoding
   model.rs           the synced document: day log, goals, and the merge
-  stats.rs           streaks, totals, milestones
+  stats.rs           streaks, totals, milestones, and the weekday breakdown
   legacy.rs          backup format, import, and migration from older storage
   prefs.rs           device-local settings
 web/                 the Dioxus client
@@ -128,8 +135,8 @@ web/                 the Dioxus client
   src/audio.rs       the optional chime, synthesised from oscillators
   src/ui/mod.rs      shared context, the hold/reset/undo rituals, root layout
   src/ui/board.rs    the PCB, the pads, keyboard navigation
-  src/ui/console.rs  goals, readout, dimmer, settings, export/import
-  src/ui/about.rs    the back of the board
+  src/ui/console.rs  goal chips, the board and back controls, the settings panel
+  src/ui/about.rs    the back of the board: the log, the controls, settings
   assets/main.css
 server/              axum: merge, persist, serve the client
 ```
@@ -143,13 +150,20 @@ The board is CSS, not images: hexagons are `clip-path` polygons, the bamboo
 frame is layered gradients, and pad sizing is driven by container query units
 so the whole board scales from a phone to a desktop without a media query.
 
+Nothing sits outside the frame. Goals are chips on the silkscreen header, the
+year, Today and the year-versus-month toggle run along the bottom edge,
+and everything you set once lives on the back with the log: brightness,
+sound, theme, and the settings panel. The middle of the back scrolls and its
+foot does not, so the control that flips the board back sits where the one
+that flipped it was.
+
 ## Privacy
 
 With no sync server, nothing leaves your browser: no account, no analytics, no
 network requests after the page loads. The physical calendar is proudly 0%
 internet-connected, and so is this. With one, your days reach exactly the
-machine you chose to run it on. **Export backup** in Settings gives you a copy
-either way.
+machine you chose to run it on. **Export backup**, on the back of the board,
+gives you a copy either way.
 
 ## Credit
 

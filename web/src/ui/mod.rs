@@ -615,4 +615,3 @@ fn Celebration() -> Element {
         }
     }
 }
-

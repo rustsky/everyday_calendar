@@ -318,9 +318,10 @@ a {
 
 .silkscreen {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
   margin-bottom: clamp(8px, 1.6cqw, 14px);
   padding-bottom: 8px;
   border-bottom: 1px dashed rgba(198, 158, 74, 0.28);
@@ -955,7 +956,7 @@ input[type="range"]:focus-visible {
   flex-wrap: wrap;
 }
 
-.settings-row > label,
+.settings-row > label:not(.button),
 .settings-label {
   min-width: 5.5rem;
   font-size: 13px;
@@ -1217,9 +1218,10 @@ input[type="text"]:focus-visible {
 /* The flip control and the one line of instructions, both on the board. */
 .board-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   margin-top: clamp(8px, 1.6cqw, 14px);
   padding-top: 10px;
   border-top: 1px dashed rgba(198, 158, 74, 0.28);
@@ -1286,6 +1288,7 @@ input[type="text"]:focus-visible {
 .backplate .controls {
   display: flex;
   flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 10px 16px;
   padding-bottom: 16px;
@@ -1304,6 +1307,12 @@ input[type="text"]:focus-visible {
 .backplate .button.is-on {
   border-color: var(--led-2);
   background: color-mix(in srgb, var(--led-2) 16%, transparent);
+}
+
+.backplate .settings input[type="text"] {
+  border-color: var(--log-rule);
+  background: rgba(127, 127, 127, 0.1);
+  color: inherit;
 }
 
 .backplate .settings {
