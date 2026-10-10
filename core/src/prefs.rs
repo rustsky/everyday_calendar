@@ -60,6 +60,10 @@ pub struct Prefs {
     /// Which goal this device is looking at.
     #[serde(default)]
     pub active: Option<GoalId>,
+    /// The sync server the desktop app talks to. The web client ignores this
+    /// and asks the origin that served it.
+    #[serde(default)]
+    pub server: Option<String>,
 }
 
 impl Default for Prefs {
@@ -72,6 +76,7 @@ impl Default for Prefs {
             theme: Theme::default(),
             view: View::default(),
             active: None,
+            server: None,
         }
     }
 }
@@ -79,5 +84,45 @@ impl Default for Prefs {
 impl Prefs {
     pub fn sanitize(&mut self) {
         self.brightness = self.brightness.min(100);
+        self.server = self.server.as_deref().and_then(normalize_server);
+    }
+}
+
+/// Tidies a typed server address: trims it, drops trailing slashes, and
+/// assumes `http://` when no scheme is given. Blank means no server.
+pub fn normalize_server(raw: &str) -> Option<String> {
+    let address = raw.trim().trim_end_matches('/');
+    if address.is_empty() {
+        None
+    } else if address.contains("://") {
+        Some(address.to_string())
+    } else {
+        Some(format!("http://{address}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_addresses_are_tidied() {
+        assert_eq!(normalize_server(""), None);
+        assert_eq!(normalize_server("   "), None);
+        assert_eq!(
+            normalize_server(" my-mac:8080/ "),
+            Some("http://my-mac:8080".to_string())
+        );
+        assert_eq!(
+            normalize_server("https://calendar.example.ts.net"),
+            Some("https://calendar.example.ts.net".to_string())
+        );
+    }
+
+    #[test]
+    fn prefs_without_a_server_still_load() {
+        let prefs: Prefs = serde_json::from_str(r#"{"brightness":40}"#).unwrap();
+        assert_eq!(prefs.server, None);
+        assert_eq!(prefs.brightness, 40);
     }
 }

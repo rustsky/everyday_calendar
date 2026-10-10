@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -13,6 +15,13 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Keep in step with the dioxus version in Cargo.lock.
+  DIOXUS_CLI_VERSION: 0.7.10
+  # Needed to build the desktop app on Linux, not to run it: the AppImage
+  # carries its own copies.
+  LINUX_DESKTOP_DEPS: >-
+    libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
+    librsvg2-dev libssl-dev patchelf file libfuse2
 
 jobs:
   native:
@@ -59,11 +68,184 @@ jobs:
       - name: Build
         run: cargo build -p everydaycalendar --target wasm32-unknown-unknown --release
 
+  desktop:
+    name: Lint the desktop app
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DESKTOP_DEPS
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop
+
+      - name: Clippy
+        run: cargo clippy -p everydaycalendar --no-default-features --features desktop --all-targets
+
+  # The web build, zipped, as a plain static directory to serve from anywhere.
+  release-web:
+    name: Release / web
+    needs: [native, wasm, desktop]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-web
+
+      - uses: cargo-bins/cargo-binstall@main
+
+      - name: Install Dioxus CLI
+        run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --no-confirm
+
+      - name: Build
+        working-directory: web
+        run: dx build --platform web --release
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          name="everydaycalendar-${TAG}-web"
+          cp -R target/dx/everydaycalendar/release/web/public "$name"
+          zip -qr "${name}.zip" "$name"
+          gh release upload "$TAG" "${name}.zip" --clobber
+
+  # One self-contained package per platform: nothing else to install first.
+  release-desktop:
+    name: Release / ${{ matrix.name }}
+    needs: [native, wasm, desktop]
+    if: github.event_name == 'release'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest runner, so the AppImage's glibc floor stays low enough
+          # for older distributions.
+          - { name: linux-x86_64, os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, package: appimage, ext: AppImage }
+          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin, package: dmg, ext: dmg }
+          - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin, package: dmg, ext: dmg }
+          - { name: windows-x86_64-setup, os: windows-latest, target: x86_64-pc-windows-msvc, package: nsis, ext: exe }
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_DESKTOP_DEPS
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      # dx runs on the build machine and cross-builds with --target, so it is
+      # always the build machine's own binary.
+      - name: Install Dioxus CLI (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          arch=$([ "$RUNNER_ARCH" = ARM64 ] && echo aarch64 || echo x86_64)
+          curl -sSfL "https://github.com/DioxusLabs/dioxus/releases/download/v${DIOXUS_CLI_VERSION}/dx-${arch}-apple-darwin.tar.gz" \
+            | tar -xz -C "$HOME/.cargo/bin" dx
+          dx --version
+
+      # The prebuilt Linux dx needs a newer glibc than 22.04 has.
+      - name: Cache Dioxus CLI (Linux)
+        if: runner.os == 'Linux'
+        id: dx-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dx
+          key: dx-${{ env.DIOXUS_CLI_VERSION }}-${{ matrix.os }}
+
+      - name: Build Dioxus CLI (Linux)
+        if: runner.os == 'Linux' && steps.dx-cache.outputs.cache-hit != 'true'
+        env:
+          RUSTFLAGS: ""
+        run: cargo install dioxus-cli --version ${{ env.DIOXUS_CLI_VERSION }} --locked
+
+      - uses: cargo-bins/cargo-binstall@main
+        if: runner.os == 'Windows'
+
+      - name: Install Dioxus CLI (Windows)
+        if: runner.os == 'Windows'
+        run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --no-confirm
+
+      # Installers show the app's version, so a v1.2.3 tag should say 1.2.3.
+      - name: Take the version from the tag
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            sed -i.bak "s/^version = \".*\"/version = \"$version\"/" Cargo.toml
+            rm Cargo.toml.bak
+          else
+            echo "::warning::Tag $TAG is not x.y.z, so packages keep the Cargo.toml version."
+          fi
+
+      # With `strip` in the release profile, dx strips the binary itself using
+      # the toolchain's rust-objcopy, which fails to load its LLVM library on
+      # the runners' stable toolchain. Cargo strips at link time instead.
+      - name: Strip at link time
+        shell: bash
+        run: |
+          sed -i.bak '/^strip = true$/d' Cargo.toml
+          rm Cargo.toml.bak
+
+      - name: Bundle
+        working-directory: web
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: symbols
+        run: dx bundle --desktop --release --target ${{ matrix.target }} --package-types ${{ matrix.package }} --out-dir dist
+
+      - name: Upload to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          NAME: ${{ matrix.name }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          file=$(find web/dist -name "*.${EXT}" | head -n 1)
+          if [ -z "$file" ]; then
+            echo "::error::No .${EXT} package in web/dist"
+            find web/dist
+            exit 1
+          fi
+          asset="everydaycalendar-${TAG}-${NAME}.${EXT}"
+          cp "$file" "$asset"
+          gh release upload "$TAG" "$asset" --clobber
+
   # The one check branch protection requires. It always runs, so a failed or
   # cancelled job above turns it red instead of leaving it pending.
   ci-result:
     name: CI result
-    needs: [native, wasm]
+    needs: [native, wasm, desktop]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +253,7 @@ jobs:
         env:
           NATIVE: ${{ needs.native.result }}
           WASM: ${{ needs.wasm.result }}
+          DESKTOP: ${{ needs.desktop.result }}
         run: |
           icon() { [ "$1" = success ] && echo "✅" || echo "❌"; }
           {
@@ -80,11 +263,12 @@ jobs:
             echo "| --- | --- |"
             echo "| Format, lint, test | $(icon "$NATIVE") $NATIVE |"
             echo "| Build the client for wasm | $(icon "$WASM") $WASM |"
+            echo "| Lint the desktop app | $(icon "$DESKTOP") $DESKTOP |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$NATIVE" = success ] && [ "$WASM" = success ]; then
+          if [ "$NATIVE" = success ] && [ "$WASM" = success ] && [ "$DESKTOP" = success ]; then
             echo "::notice title=CI passed::All checks passed. Safe to merge."
           else
-            echo "::error title=CI failed::native=$NATIVE wasm=$WASM. Merge blocked."
+            echo "::error title=CI failed::native=$NATIVE wasm=$WASM desktop=$DESKTOP. Merge blocked."
             exit 1
           fi

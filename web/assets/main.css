@@ -83,6 +83,13 @@ a {
   gap: clamp(16px, 2.4vw, 26px);
 }
 
+/* The desktop window is sized to fit the board (platform/desktop.rs), so the
+   page wraps the board exactly instead of filling the window. */
+.page.desktop {
+  min-height: 0;
+  padding: 20px;
+}
+
 .page.theme-midnight {
   --wall: #10151a;
   --wall-2: #0a0e12;

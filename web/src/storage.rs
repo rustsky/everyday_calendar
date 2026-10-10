@@ -1,4 +1,5 @@
-//! `localStorage` is the client's own copy of the document.
+//! The client's own copy of the document: `localStorage` in the browser, a
+//! few files in the data directory on the desktop.
 //!
 //! It is the source of truth for rendering, and it works with no server at
 //! all. The sync server, when there is one, is a replica this pushes to and
@@ -18,36 +19,25 @@ pub const DEVICE_KEY: &str = "everydaycalendar.device";
 /// The layout this app used before the day log existed.
 const V2_KEY: &str = "everydaycalendar.v2";
 
-fn storage() -> Option<web_sys::Storage> {
-    web_sys::window()?.local_storage().ok().flatten()
-}
-
-/// This browser's stable id, minted on first run. It is the tie-break in
+/// This device's stable id, minted on first run. It is the tie-break in
 /// last-write-wins, and it labels writes in the merged document.
 pub fn device_id() -> String {
-    let Some(store) = storage() else {
-        return platform::random_id();
-    };
-    if let Ok(Some(existing)) = store.get_item(DEVICE_KEY)
+    if let Some(existing) = platform::store_get(DEVICE_KEY)
         && !existing.is_empty()
     {
         return existing;
     }
     let fresh = platform::random_id();
-    let _ = store.set_item(DEVICE_KEY, &fresh);
+    platform::store_set(DEVICE_KEY, &fresh);
     fresh
 }
 
-/// Reads this browser's copy. Deliberately does not invent a starting goal:
+/// Reads this device's copy. Deliberately does not invent a starting goal:
 /// on a synced setup the goals arrive from the server, and minting one here
 /// would give every new device its own duplicate "Every day". See
 /// [`starter_goal`], which runs once sync has had its say.
 pub fn load_doc(device: &str) -> Doc {
-    let Some(store) = storage() else {
-        return Doc::new();
-    };
-
-    if let Ok(Some(raw)) = store.get_item(DOC_KEY)
+    if let Some(raw) = platform::store_get(DOC_KEY)
         && let Ok(doc) = serde_json::from_str::<Doc>(&raw)
     {
         return doc;
@@ -57,7 +47,7 @@ pub fn load_doc(device: &str) -> Doc {
     // app, or the original everydaycalendar.app, left behind.
     let mut doc = Doc::new();
     let stamp = Stamp::new(platform::now_ms(), device);
-    if let Some(backup) = previous_format(&store).or_else(|| original_app(&store)) {
+    if let Some(backup) = previous_format().or_else(original_app) {
         legacy::import_into(&mut doc, &backup, stamp, platform::random_id);
     }
     doc
@@ -79,43 +69,32 @@ pub fn starter_goal(device: &str) -> (String, GoalRecord) {
 
 /// This app's own v2 blob. `Backup` reads it directly — the goal list has the
 /// same shape, and the settings alongside it are simply ignored.
-fn previous_format(store: &web_sys::Storage) -> Option<Backup> {
-    let raw = store.get_item(V2_KEY).ok()??;
+fn previous_format() -> Option<Backup> {
+    let raw = platform::store_get(V2_KEY)?;
     serde_json::from_str::<Backup>(&raw).ok()
 }
 
 /// The original app stored one 61-character string per year, under the year
 /// itself as the key.
-fn original_app(store: &web_sys::Storage) -> Option<Backup> {
-    let length = store.length().ok()?;
-    let mut years = BTreeMap::new();
-    for index in 0..length {
-        let Ok(Some(key)) = store.key(index) else {
-            continue;
-        };
-        let Ok(year) = key.parse::<i32>() else {
-            continue;
-        };
-        if !(1970..=2200).contains(&year) {
-            continue;
-        }
-        if let Ok(Some(value)) = store.get_item(&key) {
-            years.insert(year, value);
-        }
-    }
+fn original_app() -> Option<Backup> {
+    let years: BTreeMap<i32, String> = platform::store_entries()
+        .into_iter()
+        .filter_map(|(key, value)| {
+            let year = key.parse::<i32>().ok()?;
+            (1970..=2200).contains(&year).then_some((year, value))
+        })
+        .collect();
     legacy::backup_from_year_strings(years)
 }
 
 pub fn save_doc(doc: &Doc) {
-    let Some(store) = storage() else { return };
     if let Ok(json) = serde_json::to_string(doc) {
-        let _ = store.set_item(DOC_KEY, &json);
+        platform::store_set(DOC_KEY, &json);
     }
 }
 
 pub fn load_prefs() -> Prefs {
-    let mut prefs = storage()
-        .and_then(|store| store.get_item(PREFS_KEY).ok().flatten())
+    let mut prefs = platform::store_get(PREFS_KEY)
         .and_then(|raw| serde_json::from_str::<Prefs>(&raw).ok())
         .unwrap_or_else(|| {
             let mut fresh = Prefs::default();
@@ -131,9 +110,8 @@ pub fn load_prefs() -> Prefs {
 }
 
 pub fn save_prefs(prefs: &Prefs) {
-    let Some(store) = storage() else { return };
     if let Ok(json) = serde_json::to_string(prefs) {
-        let _ = store.set_item(PREFS_KEY, &json);
+        platform::store_set(PREFS_KEY, &json);
     }
 }
 

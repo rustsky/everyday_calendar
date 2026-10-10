@@ -1,22 +1,47 @@
 [package]
 name = "everydaycalendar"
-description = "The Every Day Calendar, as a web app."
+description = "The Every Day Calendar, for the web and the desktop."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+# One renderer per build. `dx serve --platform web` and `--platform desktop`
+# pick the matching feature on their own.
+[features]
+default = ["web"]
+web = [
+    "dioxus/web",
+    "dep:gloo-net",
+    "dep:gloo-timers",
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:web-sys",
+]
+desktop = [
+    "dioxus/desktop",
+    "dep:chrono",
+    "dep:dirs",
+    "dep:fastrand",
+    "dep:reqwest",
+    "dep:rfd",
+    "dep:tokio",
+]
 
 [dependencies]
 edc-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-dioxus = { version = "0.7", features = ["web"] }
-gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
-gloo-timers = { version = "0.4.0", features = ["futures"] }
-js-sys = "0.3.105"
-wasm-bindgen = "0.2.128"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3.105", features = [
+dioxus = { version = "0.7" }
+
+# web
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"], optional = true }
+gloo-timers = { version = "0.4.0", features = ["futures"], optional = true }
+js-sys = { version = "0.3.105", optional = true }
+wasm-bindgen = { version = "0.2.128", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3.105", optional = true, features = [
     "AudioContext",
     "AudioDestinationNode",
     "AudioParam",
@@ -36,3 +61,11 @@ web-sys = { version = "0.3.105", features = [
     "VisibilityState",
     "Window",
 ] }
+
+# desktop
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
+dirs = { version = "6", optional = true }
+fastrand = { version = "2", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+rfd = { version = "0.17", optional = true }
+tokio = { version = "1", features = ["time"], optional = true }

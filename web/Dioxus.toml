@@ -3,3 +3,32 @@ name = "everydaycalendar"
 
 [web.app]
 title = "The Every Day Calendar"
+
+# `dx bundle --desktop`. Icons are rendered from icons/icon.svg.
+[bundle]
+identifier = "io.github.rustsky.everydaycalendar"
+publisher = "rustsky"
+category = "Productivity"
+short_description = "Set one goal. Light one day at a time. Don't break the chain."
+icon = [
+    "icons/32x32.png",
+    "icons/128x128.png",
+    "icons/128x128@2x.png",
+    "icons/icon.icns",
+    "icons/icon.ico",
+]
+
+[bundle.macos]
+bundle_name = "Every Day Calendar"
+# Ad-hoc signature. Not notarised, but Apple silicon refuses to run an app
+# with no signature at all.
+signing_identity = "-"
+
+[bundle.windows]
+# Windows 11 ships WebView2. The installer carries the small bootstrapper so a
+# Windows 10 machine without it gets it silently, with nothing to install first.
+webview_install_mode = { EmbedBootstrapper = { silent = true } }
+
+[bundle.windows.nsis]
+# Installs for the current user, so no administrator prompt.
+install_mode = "CurrentUser"
